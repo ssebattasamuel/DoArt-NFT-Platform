@@ -1,8 +1,20 @@
-# React + Vite
+# DoArt NFT Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Features include minting, batch minting, burning, artist metadata, and a hybrid Escrow contract supporting private and open sales.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **DoArt Contract**: Mint, burn, and manage NFTs with EIP-2981 royalties and artist metadata.
+- **Escrow Contract**: Securely list, deposit, approve, and finalize NFT sales (private or open).
+- **Front-End**: User-friendly interface for minting, listing, and purchasing NFTs.
+- **Supabase Backend**: Stores NFT and artist metadata off-chain.
+- **Tests**: Comprehensive Hardhat tests for all contract functionality.
+
+## Installation
+
+```bash
+git clone https://github.com/YourUsername/DoArt-NFT-Platform.git
+cd DoArt-NFT-Platform
+npm install
+npx hardhat compile
+```
