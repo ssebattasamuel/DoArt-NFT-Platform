@@ -245,6 +245,3 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
 
 
 
-  
-
-
