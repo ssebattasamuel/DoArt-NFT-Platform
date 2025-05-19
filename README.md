@@ -10,11 +10,10 @@ A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Feat
 - **Supabase Backend**: Stores NFT and artist metadata off-chain.
 - **Tests**: Comprehensive Hardhat tests for all contract functionality.
 
-## Installation
+## Setup
 
-```bash
-git clone https://github.com/YourUsername/DoArt-NFT-Platform.git
-cd DoArt-NFT-Platform
-npm install
-npx hardhat compile
-```
+1. Clone: "git clone https://github.com/ssebattasamuel/DoArt-NFT-Platform"
+2. Install:"npm install"
+3. Configure: `.env` with Supabase and Ethereum keys.
+4. Compile: "npx hardhat compile"
+5. Run: "npmrun dev"
