@@ -4,11 +4,15 @@ A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Feat
 
 ## Features
 
-- **DoArt Contract**: Mint, burn, and manage NFTs with EIP-2981 royalties and artist metadata.
-- **Escrow Contract**: Securely list, deposit, approve, and finalize NFT sales (private or open).
-- **Front-End**: User-friendly interface for minting, listing, and purchasing NFTs.
-- **Supabase Backend**: Stores NFT and artist metadata off-chain.
-- **Tests**: Comprehensive Hardhat tests for all contract functionality.
+- **NFT Minting**: Create ERC721 NFTs with metadata stored on IPFS.
+- **Royalties**: EIP-2981 compliant, ensuring creators get paid on secondary sales.
+- **Batch Minting**: Mint multiple NFTs in one transaction.
+- **Auctions**: English auctions with anti-sniping protection.
+- **Bidding**: Place bids on open listings or auctions.
+- **Lazy Minting**: List NFTs without upfront gas costs, minted on purchase.
+- **Batch Bidding**: Bid on multiple NFTs or auctions in one transaction.
+- **Escrow**: Secure trading with deposits and approval periods.
+- **Supabase Integration**: Store NFT metadata and user profiles.
 
 ## Setup
 
@@ -17,4 +21,3 @@ A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Feat
 3. Configure: `.env` with Supabase and Ethereum keys.
 4. Compile: "npx hardhat compile"
 5. Run: "npmrun dev"
-   > > > > > > > master
