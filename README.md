@@ -1,4 +1,3 @@
-
 # DoArt NFT Platform
 
 A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Features include minting, batch minting, burning, artist metadata, and a hybrid Escrow contract supporting private and open sales.
@@ -18,4 +17,4 @@ A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Feat
 3. Configure: `.env` with Supabase and Ethereum keys.
 4. Compile: "npx hardhat compile"
 5. Run: "npmrun dev"
->>>>>>> master
+   > > > > > > > master
