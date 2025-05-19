@@ -5,18 +5,28 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 interface IERC2981 {
     function royaltyInfo(uint256 tokenId, uint256 salePrice) external view returns (address receiver, uint256 royaltyAmount);
 }
 
-contract Escrow is ReentrancyGuard, AccessControl, Pausable {
+interface IDoArt {
+    function mintFor(address to, string memory metadataURI, uint96 royaltyBps) external returns (uint256);
+}
+
+contract Escrow is ReentrancyGuard, AccessControl, Pausable, EIP712 {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     
     uint256 public constant DEFAULT_VIEWING_PERIOD = 3 days;
     uint256 public constant ANTI_SNIPING_EXTENSION = 10 minutes;
     uint256 public constant ANTI_SNIPING_WINDOW = 5 minutes;
+
+     bytes32 private constant LAZYMINT_VOUCHER_TYPEHASH = keccak256(
+        "LazyMintVoucher(uint256 tokenId,address creator,uint256 price,string uri,uint96 royaltyBps)"
+    );
 
     struct Bid {
         address bidder;
@@ -46,12 +56,21 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
         address saleApprover; // Tracks who approved the sale
         bool isAuction;
     }
+     struct LazyMintVoucher {
+        uint256 tokenId;
+        address creator;
+        uint256 price;
+        string uri;
+        uint96 royaltyBps;
+        bytes signature;
+    }
 
     // Mapping of (nftContract, tokenId) to listing details
     mapping(address => mapping(uint256 => Listing)) public listings;
     // Mapping of (nftContract, tokenId) to array of bids
     mapping(address => mapping(uint256 => Bid[])) public bids;
     mapping( address => mapping(uint256 => Auction)) public auctions;
+    mapping(address => mapping(uint256 => bool)) private _voucherRedeemed;
 
     // Events
     event Listed(address indexed nftContract, uint256 indexed tokenId, address indexed seller, address buyer, uint256 price, uint256 minBid, uint256 escrowAmount, bool isAuction, uint256 auctionEndTime);
@@ -65,6 +84,8 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
     event Canceled(address indexed nftContract, uint256 indexed tokenId, address indexed initiator);
     event ViewingPeriodUpdated(address indexed nftContract, uint256 indexed tokenId, uint256 newEndTime);
     event AuctionExtended(address indexed nftContract, uint256 indexed tokenId, uint256 newEndTime);
+     event LazyMinted(address indexed nftContract, uint256 indexed tokenId, address indexed buyer, address creator, uint256 price);
+    event BatchBidPlaced(address indexed nftContract, uint256[] indexed tokenIds, address indexed bidder, uint256[] amounts, bool isAuction);
 
     constructor() {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -128,6 +149,38 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
 
         emit Listed(nftContract, tokenId, msg.sender, buyer, price, minBid, escrowAmount, isAuction, auctionEndTime);
     }
+     function redeemLazyMint(address nftContract, LazyMintVoucher calldata voucher) 
+        public 
+        payable 
+        whenNotPaused 
+        nonReentrant 
+    {
+        require(!_voucherRedeemed[nftContract][voucher.tokenId], "Voucher already redeemed");
+        require(msg.value >= voucher.price, "Insufficient payment");
+        require(voucher.royaltyBps <= 10000, "Royalty must be <= 100%");
+
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+            LAZYMINT_VOUCHER_TYPEHASH,
+            voucher.tokenId,
+            voucher.creator,
+            voucher.price,
+            keccak256(bytes(voucher.uri)),
+            voucher.royaltyBps
+        )));
+        address signer = ECDSA.recover(digest, voucher.signature);
+        require(signer == voucher.creator, "Invalid signature");
+
+        _voucherRedeemed[nftContract][voucher.tokenId] = true;
+
+        uint256 tokenId = IDoArt(nftContract).mintFor(msg.sender, voucher.uri, voucher.royaltyBps);
+
+        require(tokenId == voucher.tokenId, "Minted token ID mismatch");
+
+        (bool success,) = payable(voucher.creator).call{value: voucher.price}("");
+        require(success, "Payment to creator failed");
+
+        emit LazyMinted(nftContract, voucher.tokenId, msg.sender, voucher.creator, voucher.price);
+    }
 
     function placeBid(address nftContract, uint256 tokenId) 
         public 
@@ -156,6 +209,44 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
 
         emit BidPlaced(nftContract, tokenId, msg.sender, msg.value, false);
     }
+        function batchPlaceBid(address nftContract, uint256[] calldata tokenIds, uint256[] calldata amounts) 
+        public 
+        payable 
+        whenNotPaused 
+        nonReentrant 
+    {
+        require(tokenIds.length > 0, "No tokens provided");
+        require(tokenIds.length == amounts.length, "Mismatched array lengths");
+        require(tokenIds.length <= 50, "Batch size exceeds limit");
+        uint256 totalValue = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalValue += amounts[i];
+        }
+        require(msg.value >= totalValue, "Insufficient payment");
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            Listing memory listing = listings[nftContract][tokenIds[i]];
+            require(listing.isListed, "Token not listed");
+            require(!listing.isAuction, "Use batchPlaceAuctionBid for auctions");
+            require(listing.minBid > 0, "Bidding not enabled");
+            require(listing.buyer == address(0), "Bidding only for open sales");
+            require(amounts[i] >= listing.minBid, "Bid below minimum");
+            require(msg.sender != listing.seller, "Seller cannot bid");
+
+            Bid[] memory currentBids = bids[nftContract][tokenIds[i]];
+            if (currentBids.length > 0) {
+                require(amounts[i] > currentBids[currentBids.length - 1].amount, "Bid must be higher than current highest");
+            }
+
+            bids[nftContract][tokenIds[i]].push(Bid({
+                bidder: msg.sender,
+                amount: amounts[i]
+            }));
+        }
+
+        emit BatchBidPlaced(nftContract, tokenIds, msg.sender, amounts, false);
+    }
+
 
        function placeAuctionBid(address nftContract, uint256 tokenId) 
         public 
@@ -188,6 +279,49 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
 
         emit BidPlaced(nftContract, tokenId, msg.sender, msg.value, true);
     }
+     function batchPlaceAuctionBid(address nftContract, uint256[] calldata tokenIds, uint256[] calldata amounts) 
+        public 
+        payable 
+        whenNotPaused 
+        nonReentrant 
+    {
+        require(tokenIds.length > 0, "No tokens provided");
+        require(tokenIds.length == amounts.length, "Mismatched array lengths");
+        require(tokenIds.length <= 50, "Batch size exceeds limit");
+        uint256 totalValue = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalValue += amounts[i];
+        }
+        require(msg.value >= totalValue, "Insufficient payment");
+
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            Listing memory listing = listings[nftContract][tokenIds[i]];
+            Auction memory auction = auctions[nftContract][tokenIds[i]];
+            require(listing.isListed, "Token not listed");
+            require(listing.isAuction, "Not an auction");
+            require(auction.isActive, "Auction ended");
+            require(block.timestamp < auction.endTime, "Auction expired");
+            require(msg.sender != listing.seller, "Seller cannot bid");
+            require(amounts[i] >= auction.minBid && (auction.highestBid == 0 || amounts[i] >= auction.highestBid + auction.minIncrement), 
+                    "Bid too low");
+
+            if (auction.highestBidder != address(0)) {
+                (bool success,) = auction.highestBidder.call{value: auction.highestBid}("");
+                require(success, "Refund failed");
+            }
+
+            auctions[nftContract][tokenIds[i]].highestBidder = msg.sender;
+            auctions[nftContract][tokenIds[i]].highestBid = amounts[i];
+
+            if (auction.endTime - block.timestamp < ANTI_SNIPING_WINDOW) {
+                auctions[nftContract][tokenIds[i]].endTime += ANTI_SNIPING_EXTENSION;
+                emit AuctionExtended(nftContract, tokenIds[i], auctions[nftContract][tokenIds[i]].endTime);
+            }
+        }
+
+        emit BatchBidPlaced(nftContract, tokenIds, msg.sender, amounts, true);
+    }
+
 
     function acceptBid(address nftContract, uint256 tokenId, uint256 bidIndex) 
         public 

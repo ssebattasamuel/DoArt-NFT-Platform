@@ -18,6 +18,7 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
     // Define roles for access control
     bytes32 public constant ARTIST_ROLE = keccak256("ARTIST_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE"); 
 
     // Struct for artist metadata
     struct ArtistMetadata {
@@ -38,6 +39,7 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _setupRole(ARTIST_ROLE, msg.sender);
         _setupRole(PAUSER_ROLE, msg.sender);
+         _setupRole(MINTER_ROLE, msg.sender); // Admin can assign to Escrow.sol
     }
     function setArtistMetadata(string memory name, string memory bio, string memory portfolioUrl)
         public
@@ -70,6 +72,36 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
      whenNotPaused 
      returns (uint256)
       {
+        return _mintWithRoyalty(msg.sender, metadataURI, royaltyBps);
+
+        // require(bytes(metadataURI).length > 0, "Token URI cannot be empty"); 
+        // require(isValidTokenURI(metadataURI), "Invalid metadata URI format: must start with https:// or ipfs://");
+        // require(bytes(metadataURI).length <= 200, "Token URI too long");
+        // require(royaltyBps <= 10000, "Royalty must be <= 100%");
+
+        // _tokenIds.increment();
+        // uint256 newItemId = _tokenIds.current();
+        // _mint(msg.sender, newItemId);
+        // _setTokenURI(newItemId, metadataURI);
+        // _setTokenRoyalty(newItemId, msg.sender, royaltyBps); 
+
+        // emit TokenMinted(msg.sender, newItemId, metadataURI);
+
+        // return newItemId;
+    }
+    function mintFor(address to, string memory metadataURI, uint96 royaltyBps) 
+        public 
+        onlyRole(MINTER_ROLE) 
+        whenNotPaused 
+        returns (uint256)
+    {
+        return _mintWithRoyalty(to, metadataURI, royaltyBps);
+    }
+
+     function _mintWithRoyalty(address to, string memory metadataURI, uint96 royaltyBps) 
+        internal 
+        returns (uint256)
+    {
         require(bytes(metadataURI).length > 0, "Token URI cannot be empty"); 
         require(isValidTokenURI(metadataURI), "Invalid metadata URI format: must start with https:// or ipfs://");
         require(bytes(metadataURI).length <= 200, "Token URI too long");
@@ -77,14 +109,16 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
 
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
-        _mint(msg.sender, newItemId);
+        _mint(to, newItemId);
         _setTokenURI(newItemId, metadataURI);
-        _setTokenRoyalty(newItemId, msg.sender, royaltyBps); 
+        _setTokenRoyalty(newItemId, to, royaltyBps); 
 
-        emit TokenMinted(msg.sender, newItemId, metadataURI);
-
+        emit TokenMinted(to, newItemId, metadataURI);
         return newItemId;
     }
+
+
+
 
     function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
         public
@@ -99,19 +133,21 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         uint256[] memory tokenIds = new uint256[](metadataURIs.length);
 
         for (uint256 i = 0; i < metadataURIs.length; i++) {
-            require(bytes(metadataURIs[i]).length > 0, "Metadata URI cannot be empty");
-            require(isValidTokenURI(metadataURIs[i]), "Invalid metadata URI format: must start with https:// or ipfs://");
-            require(bytes(metadataURIs[i]).length <= 200, "Metadata URI too long");
-            require(royaltyBps[i] <= 10000, "Royalty must be <= 100%");
+            // require(bytes(metadataURIs[i]).length > 0, "Metadata URI cannot be empty");
+            // require(isValidTokenURI(metadataURIs[i]), "Invalid metadata URI format: must start with https:// or ipfs://");
+            // require(bytes(metadataURIs[i]).length <= 200, "Metadata URI too long");
+            // require(royaltyBps[i] <= 10000, "Royalty must be <= 100%");
 
-            _tokenIds.increment();
-            uint256 newItemId = _tokenIds.current();
-            _mint(msg.sender, newItemId);
-            _setTokenURI(newItemId, metadataURIs[i]);
-            _setTokenRoyalty(newItemId, msg.sender, royaltyBps[i]);
+            // _tokenIds.increment();
+            // uint256 newItemId = _tokenIds.current();
+            // _mint(msg.sender, newItemId);
+            // _setTokenURI(newItemId, metadataURIs[i]);
+            // _setTokenRoyalty(newItemId, msg.sender, royaltyBps[i]);
 
-            emit TokenMinted(msg.sender, newItemId, metadataURIs[i]);
-            tokenIds[i] = newItemId;
+            // emit TokenMinted(msg.sender, newItemId, metadataURIs[i]);
+            // tokenIds[i] = newItemId;
+             tokenIds[i] = _mintWithRoyalty(msg.sender, metadataURIs[i], royaltyBps[i]);
+        }
         }
 
         return tokenIds;
