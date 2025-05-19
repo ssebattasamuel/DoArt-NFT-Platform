@@ -27,7 +27,7 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
         uint256 endTime;
         uint256 minBid;
         uint256 minIncrement;
-        uint256 highestBidder;
+        address highestBidder;
         uint256 highestBid;
         bool isActive;
     }
@@ -114,7 +114,6 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
             saleApprover: address(0),
             isAuction: isAuction
         });
-
          if (isAuction) {
             require(auctionDuration >= 1 hours, "Auction duration too short");
             auctions[nftContract][tokenId] = Auction({
@@ -127,8 +126,7 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
             });
         }
 
-
-        emit Listed(nftContract, tokenId, msg.sender, buyer, price, minBid, escrowAmount);
+        emit Listed(nftContract, tokenId, msg.sender, buyer, price, minBid, escrowAmount, isAuction, auctionEndTime);
     }
 
     function placeBid(address nftContract, uint256 tokenId) 
@@ -156,7 +154,7 @@ contract Escrow is ReentrancyGuard, AccessControl, Pausable {
             amount: msg.value
         }));
 
-        emit BidPlaced(nftContract, tokenId, msg.sender, msg.value);
+        emit BidPlaced(nftContract, tokenId, msg.sender, msg.value, false);
     }
 
        function placeAuctionBid(address nftContract, uint256 tokenId) 
