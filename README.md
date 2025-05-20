@@ -21,3 +21,6 @@ A decentralized NFT platform built with Solidity, JavaScript, and Supabase. Feat
 3. Configure: `.env` with Supabase and Ethereum keys.
 4. Compile: "npx hardhat compile"
 5. Run: "npmrun dev"
+6. Run node: `npx hardhat node`
+7. Deploy: `npx hardhat run scripts/deploy.cjs --network localhost`
+8. Start front-end: `npm run dev`
