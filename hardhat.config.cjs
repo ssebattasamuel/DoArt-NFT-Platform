@@ -1,6 +1,5 @@
 require('@nomicfoundation/hardhat-toolbox');
 
-/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
     version: '0.8.9',
@@ -12,6 +11,8 @@ module.exports = {
     },
   },
   networks: {
-    hardhat: {},
+    hardhat: {
+      chainId: 1337,
+    },
   },
 };

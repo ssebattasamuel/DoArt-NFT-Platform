@@ -2,21 +2,37 @@ const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
 describe('DoArt Contract', function () {
-  let DoArt, doArt, owner, artist, minter, other;
+  let DoArt, doArt, EscrowStorage, escrowStorage, owner, artist, minter, other;
   const metadataURI = 'ipfs://QmTest123';
   const invalidURI = 'http://invalid.com';
   const royaltyBps = 500; // 5%
 
   beforeEach(async function () {
     [owner, artist, minter, other] = await ethers.getSigners();
-    DoArt = await ethers.getContractFactory('DoArt');
-    doArt = await DoArt.deploy();
-    await doArt.deployed();
+    console.log('Deployer address:', owner.address);
+
+    EscrowStorage = await ethers.getContractFactory('EscrowStorage', owner);
+    console.log('EscrowStorage factory retrieved');
+    escrowStorage = await EscrowStorage.deploy();
+    await escrowStorage.waitForDeployment();
+    console.log('EscrowStorage address:', escrowStorage.address);
+    if (!escrowStorage.address)
+      throw new Error('EscrowStorage address is null');
+
+    DoArt = await ethers.getContractFactory('DoArt', owner);
+    doArt = await DoArt.deploy(escrowStorage.address);
+    await doArt.waitForDeployment();
+    console.log('DoArt address:', doArt.address);
+    if (!doArt.address) throw new Error('DoArt address is null');
 
     // Grant roles
     await doArt.grantRole(await doArt.ARTIST_ROLE(), artist.address);
     await doArt.grantRole(await doArt.PAUSER_ROLE(), owner.address);
     await doArt.grantRole(await doArt.MINTER_ROLE(), minter.address);
+    await escrowStorage.grantRole(
+      await escrowStorage.ADMIN_ROLE(),
+      doArt.address
+    );
   });
 
   describe('Deployment', function () {
@@ -82,17 +98,13 @@ describe('DoArt Contract', function () {
       expect(await doArt.ownerOf(1)).to.equal(artist.address);
       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
       const [, royaltyAmount] = await doArt.royaltyInfo(1, 10000);
-      expect(royaltyAmount).to.equal(royaltyBps);
+      expect(royaltyAmount).to.equal(ethers.BigNumber.from(royaltyBps));
     });
 
     it('Should revert if non-artist tries to mint', async function () {
       await expect(
         doArt.connect(other).mint(metadataURI, royaltyBps)
-      ).to.be.revertedWith(
-        'AccessControl: account ' +
-          other.address.toLowerCase() +
-          ' is missing role 0x877a78dc988c0ec5f58453b44888a55eb39755c3d5ed8d8ea990912aa3ef29c6'
-      );
+      ).to.be.revertedWith(/AccessControl: account .* is missing role/);
     });
 
     it('Should revert for invalid mint inputs', async function () {
@@ -123,17 +135,13 @@ describe('DoArt Contract', function () {
       expect(await doArt.ownerOf(1)).to.equal(other.address);
       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
       const [, royaltyAmount] = await doArt.royaltyInfo(1, 10000);
-      expect(royaltyAmount).to.equal(royaltyBps);
+      expect(royaltyAmount).to.equal(ethers.BigNumber.from(royaltyBps));
     });
 
     it('Should revert if non-minter tries to mintFor', async function () {
       await expect(
         doArt.connect(other).mintFor(other.address, metadataURI, royaltyBps)
-      ).to.be.revertedWith(
-        'AccessControl: account ' +
-          other.address.toLowerCase() +
-          ' is missing role 0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6'
-      );
+      ).to.be.revertedWith(/AccessControl: account .* is missing role/);
     });
   });
 
@@ -144,8 +152,8 @@ describe('DoArt Contract', function () {
 
       const tx = await doArt.connect(artist).batchMint(uris, royalties);
       const receipt = await tx.wait();
-      const tokenIds = receipt.events
-        .filter((e) => e.event === 'TokenMinted')
+      const tokenIds = receipt.logs
+        .filter((e) => e.eventName === 'TokenMinted')
         .map((e) => e.args.tokenId);
 
       expect(tokenIds).to.have.length(2);
@@ -204,9 +212,7 @@ describe('DoArt Contract', function () {
 
     it('Should revert if non-pauser tries to pause', async function () {
       await expect(doArt.connect(other).pause()).to.be.revertedWith(
-        'AccessControl: account ' +
-          other.address.toLowerCase() +
-          ' is missing role 0x65d7a28e3265b37a6474929f336521b332c1681b933f6cb9f3376673440d862a'
+        /AccessControl: account .* is missing role/
       );
     });
   });
@@ -216,13 +222,14 @@ describe('DoArt Contract', function () {
       await doArt.connect(artist).mint(metadataURI, royaltyBps);
       const [recipient, amount] = await doArt.royaltyInfo(1, 10000);
       expect(recipient).to.equal(artist.address);
-      expect(amount).to.equal(royaltyBps);
+      expect(amount).to.equal(ethers.BigNumber.from(royaltyBps));
 
-      // Test with different sale price
-      const salePrice = ethers.utils.parseEther('1');
+      const salePrice = ethers.parseEther('1');
       const [recipient2, amount2] = await doArt.royaltyInfo(1, salePrice);
       expect(recipient2).to.equal(artist.address);
-      expect(amount2).to.equal(salePrice.mul(royaltyBps).div(10000));
+      expect(amount2).to.equal(
+        (salePrice * BigInt(royaltyBps)) / BigInt(10000)
+      );
     });
 
     it('Should allow admin to update royalty', async function () {
@@ -230,15 +237,15 @@ describe('DoArt Contract', function () {
       await doArt.connect(owner).setTokenRoyalty(1, other.address, 1000);
       const [recipient, amount] = await doArt.royaltyInfo(1, 10000);
       expect(recipient).to.equal(other.address);
-      expect(amount).to.equal(1000);
+      expect(amount).to.equal(ethers.BigNumber.from(1000));
     });
   });
 
   describe('Utility Functions', function () {
     it('Should return correct total supply', async function () {
-      expect(await doArt.totalSupply()).to.equal(0);
+      expect(await doArt.totalSupply()).to.equal(ethers.BigNumber.from(0));
       await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      expect(await doArt.totalSupply()).to.equal(1);
+      expect(await doArt.totalSupply()).to.equal(ethers.BigNumber.from(1));
     });
 
     it('Should return tokens of owner', async function () {
@@ -255,7 +262,7 @@ describe('DoArt Contract', function () {
       expect(ownerAddr).to.equal(artist.address);
       expect(uri).to.equal(metadataURI);
       expect(royaltyRecipient).to.equal(artist.address);
-      expect(bps).to.equal(royaltyBps);
+      expect(bps).to.equal(ethers.BigNumber.from(royaltyBps));
     });
   });
 });

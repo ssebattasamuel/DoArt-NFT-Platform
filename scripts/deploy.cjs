@@ -1,50 +1,54 @@
-const hre = require('hardhat');
-
-const tokens = (n) => {
-  return ethers.utils.parseUnits(n.toString(), 'ether');
-};
-
+const { ethers } = require('hardhat');
 async function main() {
-  //setup accounts
-  [buyer, seller, signer] = await ethers.getSigners();
+  const [deployer] = await ethers.getSigners();
+  console.log('Deploying contracts with:', deployer.address);
 
-  // deploy doArt
+  const EscrowStorage = await ethers.getContractFactory('EscrowStorage');
+  const escrowStorage = await EscrowStorage.deploy();
+  console.log('EscrowStorage deployed to:', escrowStorage.address);
+
   const DoArt = await ethers.getContractFactory('DoArt');
-  const doArt = await DoArt.deploy();
-  await doArt.deployed();
+  const doArt = await DoArt.deploy(escrowStorage.address);
+  console.log('DoArt deployed to:', doArt.address);
 
-  console.log(`Deployed DoArt contract at: ${doArt.address}`);
+  const EscrowAuctions = await ethers.getContractFactory('EscrowAuctions');
+  const escrowAuctions = await EscrowAuctions.deploy(escrowStorage.address);
+  console.log('EscrowAuctions deployed to:', escrowAuctions.address);
 
-  let transaction = await doArt
-    .connect(seller)
-    .mint(
-      'https://ipfs.io/ipfs/QmdnpYDcJM4YMXJYnMx3ueSuAGNC95jFBVvKSVZtTG5PM8.json'
-    );
-  await transaction.wait();
-  // deploy escrow
-  const Escrow = await ethers.getContractFactory('Escrow');
-  const escrow = await Escrow.deploy(doArt.address, seller.address);
-  await escrow.deployed();
-  console.log(`Deployed escrow at :${escrow.address}`);
-  // approve art
-  transaction = await doArt.connect(seller).approve(escrow.address, 1);
-  await transaction.wait();
-  // listing  sales
-  transaction = await escrow
-    .connect(seller)
-    .listNft(
-      1,
-      buyer.address,
-      tokens(10),
-      tokens(5),
-      'copyright@ssebattasamuel'
-    );
+  const EscrowListings = await ethers.getContractFactory('EscrowListings');
+  const escrowListings = await EscrowListings.deploy(
+    escrowStorage.address,
+    escrowAuctions.address
+  );
+  console.log('EscrowListings deployed to:', escrowListings.address);
 
-  await transaction.wait();
+  const EscrowLazyMinting = await ethers.getContractFactory(
+    'EscrowLazyMinting'
+  );
+  const escrowLazyMinting = await EscrowLazyMinting.deploy(
+    escrowStorage.address
+  );
+  console.log('EscrowLazyMinting deployed to:', escrowLazyMinting.address);
 
-  console.log('finished');
+  await escrowStorage.grantRole(
+    await escrowStorage.ADMIN_ROLE(),
+    escrowListings.address
+  );
+  await escrowStorage.grantRole(
+    await escrowStorage.ADMIN_ROLE(),
+    escrowAuctions.address
+  );
+  await escrowStorage.grantRole(
+    await escrowStorage.ADMIN_ROLE(),
+    escrowLazyMinting.address
+  );
+  await escrowStorage.grantRole(
+    await escrowStorage.ADMIN_ROLE(),
+    doArt.address
+  );
+  await doArt.grantRole(await doArt.MINTER_ROLE(), escrowLazyMinting.address);
+  console.log('Roles granted');
 }
-
 main().catch((error) => {
   console.error(error);
   process.exitCode = 1;

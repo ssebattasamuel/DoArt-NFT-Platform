@@ -67,3 +67,33 @@ function ArtNftCard({ artNft }) {
   );
 }
 export default ArtNftCard;
+
+/*{const ArtNftCard = ({ nft }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+    useEffect(() => {
+      if (nft.isAuction) {
+        const interval = setInterval(() => {
+          const now = Date.now() / 1000;
+          const time = nft.endTime - now;
+          if (time <= 0) {
+            setTimeLeft('Ended');
+            clearInterval(interval);
+          } else {
+            const hours = Math.floor(time / 3600);
+            const minutes = Math.floor((time % 3600) / 60);
+            setTimeLeft(`${hours}h ${minutes}m`);
+          }
+        }, 1000);
+        return () => clearInterval(interval);
+      }
+    }, [nft]);
+
+    return (
+      <div>
+        <h3>Token #{nft.tokenId}</h3>
+        <p>Min Bid: {ethers.utils.formatEther(nft.minBid)} ETH</p>
+        {nft.isAuction && <p>Time Left: {timeLeft}</p>}
+        {/* Add bid button if needed */}
+      </div>
+    );
+  };}*/
