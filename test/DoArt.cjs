@@ -13,15 +13,30 @@ describe('DoArt Contract', function () {
 
     EscrowStorage = await ethers.getContractFactory('EscrowStorage', owner);
     console.log('EscrowStorage factory retrieved');
-    escrowStorage = await EscrowStorage.deploy();
-    await escrowStorage.waitForDeployment();
-    console.log('EscrowStorage address:', escrowStorage.address);
-    if (!escrowStorage.address)
-      throw new Error('EscrowStorage address is null');
+    try {
+      escrowStorage = await EscrowStorage.deploy();
+      console.log('EscrowStorage deployment initiated');
+      await escrowStorage.deployed();
+      console.log('EscrowStorage deployed, address:', escrowStorage.address);
+      const deployTx = escrowStorage.deployTransaction;
+      console.log('EscrowStorage deployment tx:', deployTx.hash);
+      const receipt = await deployTx.wait();
+      console.log('EscrowStorage deployment receipt:', {
+        contractAddress: receipt.contractAddress,
+        gasUsed: receipt.gasUsed.toString(),
+        status: receipt.status,
+      });
+      if (!escrowStorage.address) {
+        throw new Error('EscrowStorage address is null');
+      }
+    } catch (error) {
+      console.error('EscrowStorage deployment failed:', error);
+      throw error;
+    }
 
     DoArt = await ethers.getContractFactory('DoArt', owner);
     doArt = await DoArt.deploy(escrowStorage.address);
-    await doArt.waitForDeployment();
+    await doArt.deployed();
     console.log('DoArt address:', doArt.address);
     if (!doArt.address) throw new Error('DoArt address is null');
 
@@ -152,8 +167,21 @@ describe('DoArt Contract', function () {
 
       const tx = await doArt.connect(artist).batchMint(uris, royalties);
       const receipt = await tx.wait();
+      console.log('Batch mint receipt:', {
+        gasUsed: receipt.gasUsed.toString(),
+        events: receipt.logs.map((log) => {
+          try {
+            const parsed = doArt.interface.parseLog(log);
+            return { name: parsed.name, args: parsed.args };
+          } catch {
+            return { name: 'unknown', args: {} };
+          }
+        }),
+      });
+
       const tokenIds = receipt.logs
-        .filter((e) => e.eventName === 'TokenMinted')
+        .map((log) => doArt.interface.parseLog(log))
+        .filter((e) => e.name === 'TokenMinted')
         .map((e) => e.args.tokenId);
 
       expect(tokenIds).to.have.length(2);
@@ -224,12 +252,10 @@ describe('DoArt Contract', function () {
       expect(recipient).to.equal(artist.address);
       expect(amount).to.equal(ethers.BigNumber.from(royaltyBps));
 
-      const salePrice = ethers.parseEther('1');
+      const salePrice = ethers.utils.parseEther('1');
       const [recipient2, amount2] = await doArt.royaltyInfo(1, salePrice);
       expect(recipient2).to.equal(artist.address);
-      expect(amount2).to.equal(
-        (salePrice * BigInt(royaltyBps)) / BigInt(10000)
-      );
+      expect(amount2).to.equal(salePrice.mul(royaltyBps).div(10000));
     });
 
     it('Should allow admin to update royalty', async function () {

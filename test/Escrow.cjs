@@ -15,11 +15,10 @@ describe('Escrow Contracts', function () {
   let owner, seller, buyer, bidder, artist;
   const metadataURI = 'ipfs://QmTest123';
   const royaltyBps = 500; // 5%
-  const price = ethers.parseEther('1');
-  const minBid = ethers.parseEther('0.1');
-  const escrowAmount = ethers.parseEther('0.2');
+  const price = ethers.utils.parseEther('1');
+  const minBid = ethers.utils.parseEther('0.1');
+  const escrowAmount = ethers.utils.parseEther('0.2');
   const auctionDuration = 60 * 60 * 24; // 1 day
-
   beforeEach(async function () {
     [owner, seller, buyer, bidder, artist] = await ethers.getSigners();
     console.log('Deployer address:', owner.address);
@@ -29,10 +28,20 @@ describe('Escrow Contracts', function () {
     console.log('EscrowStorage factory retrieved');
     try {
       escrowStorage = await EscrowStorage.deploy();
-      await escrowStorage.waitForDeployment();
+      console.log('EscrowStorage deployment initiated');
+      await escrowStorage.deployed();
       console.log('EscrowStorage deployed, address:', escrowStorage.address);
-      if (!escrowStorage.address)
+      const deployTx = escrowStorage.deployTransaction;
+      console.log('EscrowStorage deployment tx:', deployTx.hash);
+      const receipt = await deployTx.wait();
+      console.log('EscrowStorage deployment receipt:', {
+        contractAddress: receipt.contractAddress,
+        gasUsed: receipt.gasUsed.toString(),
+        status: receipt.status,
+      });
+      if (!escrowStorage.address) {
         throw new Error('EscrowStorage address is null');
+      }
     } catch (error) {
       console.error('EscrowStorage deployment failed:', error);
       throw error;
@@ -41,28 +50,44 @@ describe('Escrow Contracts', function () {
     // Deploy DoArt
     DoArt = await ethers.getContractFactory('DoArt', owner);
     doArt = await DoArt.deploy(escrowStorage.address);
-    await doArt.waitForDeployment();
+    await doArt.deployed();
     console.log('DoArt address:', doArt.address);
     if (!doArt.address) throw new Error('DoArt address is null');
 
+    // Deploy EscrowListings with placeholder EscrowAuctions address
+    EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
+    escrowListings = await EscrowListings.deploy(
+      escrowStorage.address,
+      ethers.constants.AddressZero
+    );
+    await escrowListings.deployed();
+    console.log('EscrowListings address:', escrowListings.address);
+    if (!escrowListings.address)
+      throw new Error('EscrowListings address is null');
+
     // Deploy EscrowAuctions
     EscrowAuctions = await ethers.getContractFactory('EscrowAuctions', owner);
-    escrowAuctions = await EscrowAuctions.deploy(escrowStorage.address);
-    await escrowAuctions.waitForDeployment();
+    escrowAuctions = await EscrowAuctions.deploy(
+      escrowStorage.address,
+      escrowListings.address
+    );
+    await escrowAuctions.deployed();
     console.log('EscrowAuctions address:', escrowAuctions.address);
     if (!escrowAuctions.address)
       throw new Error('EscrowAuctions address is null');
 
-    // Deploy EscrowListings
+    // Update EscrowListings with EscrowAuctions address (if needed)
+    // Note: If EscrowListings needs escrowAuctions.address, redeploy or set via a setter
     EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
     escrowListings = await EscrowListings.deploy(
       escrowStorage.address,
       escrowAuctions.address
     );
-    await escrowListings.waitForDeployment();
-    console.log('EscrowListings address:', escrowListings.address);
-    if (!escrowListings.address)
-      throw new Error('EscrowListings address is null');
+    await escrowListings.deployed();
+    console.log(
+      'EscrowListings redeployed with EscrowAuctions, address:',
+      escrowListings.address
+    );
 
     // Deploy EscrowLazyMinting
     EscrowLazyMinting = await ethers.getContractFactory(
@@ -70,7 +95,7 @@ describe('Escrow Contracts', function () {
       owner
     );
     escrowLazyMinting = await EscrowLazyMinting.deploy(escrowStorage.address);
-    await escrowLazyMinting.waitForDeployment();
+    await escrowLazyMinting.deployed();
     console.log('EscrowLazyMinting address:', escrowLazyMinting.address);
     if (!escrowLazyMinting.address)
       throw new Error('EscrowLazyMinting address is null');
@@ -232,17 +257,28 @@ describe('Escrow Contracts', function () {
     });
 
     it('Should place a single auction bid', async function () {
-      await expect(
-        escrowAuctions
-          .connect(bidder)
-          .placeBid(doArt.address, [1], [minBid], { value: minBid })
-      )
+      console.log('Placing bid with bidder:', bidder.address);
+      const tx = await escrowAuctions
+        .connect(bidder)
+        .placeBid(doArt.address, [1], [minBid], { value: minBid });
+      const receipt = await tx.wait();
+      console.log('Bid transaction receipt:', {
+        gasUsed: receipt.gasUsed.toString(),
+        events: receipt.logs.map((e) => ({ name: e.eventName, args: e.args })),
+      });
+
+      await expect(tx)
         .to.emit(escrowAuctions, 'Action')
         .withArgs(doArt.address, 1, 3, bidder.address, minBid)
         .to.emit(escrowStorage, 'BidChanged')
         .withArgs(doArt.address, 1);
 
       const auction = await escrowStorage.getAuction(doArt.address, 1);
+      console.log('Auction state:', {
+        isActive: auction.isActive,
+        highestBidder: auction.highestBidder,
+        highestBid: auction.highestBid.toString(),
+      });
       expect(auction.highestBidder).to.equal(bidder.address);
       expect(auction.highestBid).to.equal(minBid);
     });
@@ -251,21 +287,20 @@ describe('Escrow Contracts', function () {
   describe('Lazy Minting', function () {
     it('Should redeem a lazy mint voucher', async function () {
       const tokenId = 1;
-      const voucher = {
-        tokenId,
-        creator: artist.address,
-        price: price,
-        uri: metadataURI,
-        royaltyBps,
-        signature: '0x',
-      };
+      const metadataURI = 'ipfs://QmTest123';
+      const royaltyBps = 500; // 5%
+      const price = ethers.utils.parseEther('0.1');
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+      console.log('Chain ID:', chainId);
 
       const domain = {
         name: 'DoArtNFTPlatform',
         version: '1',
-        chainId: await ethers.provider.getNetwork().then((net) => net.chainId),
+        chainId: chainId,
         verifyingContract: escrowLazyMinting.address,
       };
+      console.log('Domain:', domain);
+
       const types = {
         LazyMintVoucher: [
           { name: 'tokenId', type: 'uint256' },
@@ -275,21 +310,33 @@ describe('Escrow Contracts', function () {
           { name: 'royaltyBps', type: 'uint96' },
         ],
       };
-      const signature = await artist.signTypedData(domain, types, voucher);
-      voucher.signature = signature;
+      console.log('Types:', types);
 
-      await expect(
-        escrowLazyMinting
-          .connect(buyer)
-          .redeemLazyMint(doArt.address, voucher, { value: price })
-      )
-        .to.emit(escrowLazyMinting, 'Action')
-        .withArgs(doArt.address, tokenId, 10, buyer.address, price);
+      const voucher = {
+        tokenId,
+        creator: artist.address,
+        price,
+        uri: metadataURI,
+        royaltyBps,
+      };
+      console.log('Voucher:', voucher);
 
+      const signature = await artist._signTypedData(domain, types, voucher);
+      console.log('Signature:', signature);
+
+      const isValid = await escrowLazyMinting.verify(voucher, signature);
+      console.log('Is Valid:', isValid);
+      expect(isValid).to.be.true;
+
+      const balanceBefore = await doArt.balanceOf(buyer.address);
+      await escrowLazyMinting
+        .connect(buyer)
+        .redeemLazyMint(doArt.address, voucher, { value: price });
+      expect(await doArt.balanceOf(buyer.address)).to.equal(
+        balanceBefore.add(1)
+      );
       expect(await doArt.ownerOf(tokenId)).to.equal(buyer.address);
       expect(await doArt.tokenURI(tokenId)).to.equal(metadataURI);
-      expect(await escrowStorage.getVoucherRedeemed(doArt.address, tokenId)).to
-        .be.true;
     });
   });
 

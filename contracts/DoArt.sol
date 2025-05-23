@@ -91,23 +91,22 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return newItemId;
     }
 
-    function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
-        public
-        onlyRole(ARTIST_ROLE)
-        whenNotPaused
-        returns (uint256[] memory)
-    {
-        require(metadataURIs.length > 0, "No metadata URIs provided");
-        require(metadataURIs.length == royaltyBps.length, "Mismatched array lengths");
-        require(metadataURIs.length <= 50, "Batch size exceeds limit");
+   function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
+    public
+    onlyRole(ARTIST_ROLE)
+    whenNotPaused
+    returns (uint256[] memory)
+{
+    require(metadataURIs.length > 0, "No metadata URIs provided");
+    require(metadataURIs.length == royaltyBps.length, "Mismatched array lengths");
+    require(metadataURIs.length <= 50, "Batch size exceeds limit");
 
-        for (uint256 i = 0; i < metadataURIs.length; i++) {
-            uint256 tokenId = _mintSingle(msg.sender, metadataURIs[i], royaltyBps[i]);
-            storageContract.storeTempTokenId(msg.sender, tokenId);
-        }
-        uint256[] memory tokenIds = storageContract.getTempTokenIds(msg.sender);
-        return tokenIds;
+    uint256[] memory tokenIds = new uint256[](metadataURIs.length);
+    for (uint256 i = 0; i < metadataURIs.length; i++) {
+        tokenIds[i] = _mintSingle(msg.sender, metadataURIs[i], royaltyBps[i]);
     }
+    return tokenIds;
+}
 
     function burn(uint256 tokenId)
         public

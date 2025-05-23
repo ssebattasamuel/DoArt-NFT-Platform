@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 contract EscrowAuctions {
     EscrowStorage public storageContract;
     bool private locked;
+    address public escrowListings;
 
     event Action(
         address indexed nftContract,
@@ -17,9 +18,10 @@ contract EscrowAuctions {
         uint256 value
     );
 
-    constructor(address _storageContract) {
-        storageContract = EscrowStorage(_storageContract);
-    }
+    constructor(address _storageContract, address _escrowListings) {
+    storageContract = EscrowStorage(_storageContract);
+    escrowListings = _escrowListings;
+}
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -149,75 +151,75 @@ contract EscrowAuctions {
         } catch {}
     }
 
-    function _placeSingleBid(address nftContract, uint256 tokenId, uint256 amount) internal {
-        EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
-        require(listing.isListed, "Token not listed");
-        require(msg.sender != listing.seller, "Seller cannot bid");
+   function _placeSingleBid(address nftContract, uint256 tokenId, uint256 amount) internal {
+    EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
+    require(listing.isListed, "Token not listed");
+    require(msg.sender != listing.seller, "Seller cannot bid");
 
-        if (listing.isAuction) {
-            EscrowStorage.Auction memory auction = storageContract.getAuction(nftContract, tokenId);
-            require(auction.isActive, "Auction ended");
-            require(block.timestamp < auction.endTime, "Auction expired");
-            require(
-                amount >= auction.minBid && (auction.highestBid == 0 || amount >= auction.highestBid + auction.minIncrement),
-                "Bid too low"
-            );
+    if (listing.isAuction) {
+        EscrowStorage.Auction memory auction = storageContract.getAuction(nftContract, tokenId);
+        require(auction.isActive, "Auction ended");
+        require(block.timestamp < auction.endTime, "Auction expired");
+        require(
+            amount >= auction.minBid && (auction.highestBid == 0 || amount >= auction.highestBid + auction.minIncrement),
+            "Bid too low"
+        );
 
-            if (auction.highestBidder != address(0)) {
-                payable(auction.highestBidder).transfer(auction.highestBid);
-            }
+        if (auction.highestBidder != address(0)) {
+            payable(auction.highestBidder).transfer(auction.highestBid);
+        }
 
+        storageContract.pushBid(nftContract, tokenId, EscrowStorage.Bid({bidder: msg.sender, amount: amount}));
+        storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
+            endTime: auction.endTime,
+            minBid: auction.minBid,
+            minIncrement: auction.minIncrement,
+            highestBidder: msg.sender,
+            highestBid: amount,
+            isActive: auction.isActive
+        }));
+
+        if (auction.endTime - block.timestamp < storageContract.ANTI_SNIPING_WINDOW()) {
+            uint256 newEndTime = auction.endTime + storageContract.ANTI_SNIPING_EXTENSION();
             storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
-                endTime: auction.endTime,
+                endTime: newEndTime,
                 minBid: auction.minBid,
                 minIncrement: auction.minIncrement,
                 highestBidder: msg.sender,
                 highestBid: amount,
                 isActive: auction.isActive
             }));
-
-            if (auction.endTime - block.timestamp < storageContract.ANTI_SNIPING_WINDOW()) {
-                uint256 newEndTime = auction.endTime + storageContract.ANTI_SNIPING_EXTENSION();
-                storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
-                    endTime: newEndTime,
-                    minBid: auction.minBid,
-                    minIncrement: auction.minIncrement,
-                    highestBidder: msg.sender,
-                    highestBid: amount,
-                    isActive: auction.isActive
-                }));
-                emit Action(nftContract, tokenId, 9, msg.sender, newEndTime);
-            }
-        } else {
-            require(listing.minBid > 0, "Bidding not enabled");
-            require(listing.buyer == address(0), "Bidding only for open sales");
-            require(amount >= listing.minBid, "Bid below minimum");
-
-            EscrowStorage.Bid[] memory currentBids = storageContract.getBids(nftContract, tokenId);
-            if (currentBids.length > 0) {
-                require(amount > currentBids[currentBids.length - 1].amount, "Bid must be higher than current highest");
-            }
-
-            storageContract.pushBid(nftContract, tokenId, EscrowStorage.Bid({bidder: msg.sender, amount: amount}));
+            emit Action(nftContract, tokenId, 9, msg.sender, newEndTime);
         }
-    }
+    } else {
+        require(listing.minBid > 0, "Bidding not enabled");
+        require(listing.buyer == address(0), "Bidding only for open sales");
+        require(amount >= listing.minBid, "Bid below minimum");
 
-    function _finalizeAuction(address nftContract, uint256 tokenId, address seller, address highestBidder, uint256 highestBid) internal {
-        (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, highestBid);
-        uint256 sellerAmount = highestBid - royaltyAmount;
-
-        if (royaltyAmount > 0) {
-            payable(royaltyRecipient).transfer(royaltyAmount);
-            emit Action(nftContract, tokenId, 2, royaltyRecipient, royaltyAmount);
+        EscrowStorage.Bid[] memory currentBids = storageContract.getBids(nftContract, tokenId);
+        if (currentBids.length > 0) {
+            require(amount > currentBids[currentBids.length - 1].amount, "Bid must be higher than current highest");
         }
 
-        payable(seller).transfer(sellerAmount);
-        IERC721(nftContract).transferFrom(address(this), highestBidder, tokenId);
-
-        storageContract.deleteListing(nftContract, tokenId);
-        storageContract.deleteAuction(nftContract, tokenId);
-
-        emit Action(nftContract, tokenId, 4, highestBidder, highestBid);
-        emit Action(nftContract, tokenId, 2, highestBidder, highestBid);
+        storageContract.pushBid(nftContract, tokenId, EscrowStorage.Bid({bidder: msg.sender, amount: amount}));
     }
+}
+function _finalizeAuction(address nftContract, uint256 tokenId, address seller, address highestBidder, uint256 highestBid) internal {
+    (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, highestBid);
+    uint256 sellerAmount = highestBid - royaltyAmount;
+
+    if (royaltyAmount > 0) {
+        payable(royaltyRecipient).transfer(royaltyAmount);
+        emit Action(nftContract, tokenId, 2, royaltyRecipient, royaltyAmount);
+    }
+
+    payable(seller).transfer(sellerAmount);
+    IERC721(nftContract).transferFrom(address(this), highestBidder, tokenId);
+
+    storageContract.deleteListing(nftContract, tokenId);
+    storageContract.deleteAuction(nftContract, tokenId);
+
+    emit Action(nftContract, tokenId, 4, highestBidder, highestBid);
+    emit Action(nftContract, tokenId, 2, highestBidder, highestBid);
+}
 }

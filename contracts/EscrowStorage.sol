@@ -58,7 +58,8 @@ contract EscrowStorage is AccessControl {
     mapping(address => mapping(uint256 => Bid[])) public bids;
     mapping(address => mapping(uint256 => Auction)) public auctions;
     mapping(address => mapping(uint256 => bool)) public voucherRedeemed;
-    mapping(address => uint256[]) private _tempTokenIds;
+    // mapping(address => uint256[]) private _tempTokenIds;
+    // Removed tempTokenIds storage and functions as they're no longer needed
 
     // Events
     event ListingChanged(address indexed nftContract, uint256 indexed tokenId);
@@ -120,13 +121,13 @@ contract EscrowStorage is AccessControl {
         voucherRedeemed[nftContract][tokenId] = redeemed;
     }
 
-    function storeTempTokenId(address user, uint256 tokenId) external onlyRole(ADMIN_ROLE) {
-        _tempTokenIds[user].push(tokenId);
-    }
+    // function storeTempTokenId(address user, uint256 tokenId) external onlyRole(ADMIN_ROLE) {
+    //     _tempTokenIds[user].push(tokenId);
+    // }
 
-    function getTempTokenIds(address user) external onlyRole(ADMIN_ROLE) returns (uint256[] memory) {
-        uint256[] memory tokenIds = _tempTokenIds[user];
-        delete _tempTokenIds[user];
-        return tokenIds;
-    }
+    // function getTempTokenIds(address user) external onlyRole(ADMIN_ROLE) returns (uint256[] memory) {
+    //     uint256[] memory tokenIds = _tempTokenIds[user];
+    //     delete _tempTokenIds[user];
+    //     return tokenIds;
+    // }
 }

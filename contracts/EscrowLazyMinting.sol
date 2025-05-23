@@ -4,6 +4,9 @@ pragma solidity ^0.8.9;
 import "./EscrowStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+
+
 
 contract EscrowLazyMinting {
     EscrowStorage public storageContract;
@@ -36,6 +39,12 @@ contract EscrowLazyMinting {
         _executePayments(nftContract, voucher.tokenId, voucher.price, voucher.creator);
         _mintLazy(nftContract, buyer, voucher);
         emit Action(nftContract, voucher.tokenId, 10, buyer, voucher.price);
+    }
+
+    function verify(EscrowStorage.LazyMintVoucher calldata voucher, bytes calldata signature) public view returns (bool) {
+        bytes32 hash = _hashVoucher(voucher);
+        address signer = ECDSA.recover(hash, signature);
+        return signer == voucher.creator;
     }
 
     function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) external {
