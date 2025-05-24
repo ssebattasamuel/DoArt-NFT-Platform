@@ -46,15 +46,16 @@ contract EscrowLazyMinting {
         address signer = ECDSA.recover(hash, signature);
         return signer == voucher.creator;
     }
-
-    function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) external {
-        require(msg.sender == address(this), "Only callable by contract");
-        try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
-            require(tokenId == voucher.tokenId, "Minted token ID does not match voucher");
-        } catch {
-            revert("Minting failed");
-        }
+function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) external {
+    require(msg.sender == address(this), "Only callable by contract");
+    try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
+        require(tokenId == voucher.tokenId, "Minted token ID does not match voucher");
+    } catch Error(string memory reason) {
+        revert(string(abi.encodePacked("Minting failed: ", reason)));
+    } catch {
+        revert("Minting failed: Unknown error");
     }
+}
 
     function _verifyVoucher(EscrowStorage.LazyMintVoucher calldata voucher) internal view {
         bytes32 hash = _hashVoucher(voucher);

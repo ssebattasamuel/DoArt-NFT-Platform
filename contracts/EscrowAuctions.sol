@@ -4,8 +4,13 @@ pragma solidity ^0.8.9;
 import "./EscrowStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract EscrowAuctions {
+interface IEscrowListings {
+    function transferForAuction(address nftContract, uint256 tokenId, address to) external;
+}
+
+contract EscrowAuctions is Ownable {
     EscrowStorage public storageContract;
     bool private locked;
     address public escrowListings;
@@ -18,7 +23,7 @@ contract EscrowAuctions {
         uint256 value
     );
 
-    constructor(address _storageContract, address _escrowListings) {
+    constructor(address _storageContract, address _escrowListings) Ownable() {
     storageContract = EscrowStorage(_storageContract);
     escrowListings = _escrowListings;
 }
@@ -214,12 +219,17 @@ function _finalizeAuction(address nftContract, uint256 tokenId, address seller, 
     }
 
     payable(seller).transfer(sellerAmount);
-    IERC721(nftContract).transferFrom(address(this), highestBidder, tokenId);
+    IEscrowListings(escrowListings).transferForAuction(nftContract, tokenId, highestBidder);
 
     storageContract.deleteListing(nftContract, tokenId);
     storageContract.deleteAuction(nftContract, tokenId);
 
     emit Action(nftContract, tokenId, 4, highestBidder, highestBid);
     emit Action(nftContract, tokenId, 2, highestBidder, highestBid);
+}
+function setEscrowListings(address _escrowListings) external {
+    require(msg.sender == owner(), "Only owner");
+    require(_escrowListings != address(0), "Invalid address");
+    escrowListings = _escrowListings;
 }
 }

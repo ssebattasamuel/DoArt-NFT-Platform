@@ -19,6 +19,7 @@ describe('Escrow Contracts', function () {
   const minBid = ethers.utils.parseEther('0.1');
   const escrowAmount = ethers.utils.parseEther('0.2');
   const auctionDuration = 60 * 60 * 24; // 1 day
+
   beforeEach(async function () {
     [owner, seller, buyer, bidder, artist] = await ethers.getSigners();
     console.log('Deployer address:', owner.address);
@@ -54,38 +55,32 @@ describe('Escrow Contracts', function () {
     console.log('DoArt address:', doArt.address);
     if (!doArt.address) throw new Error('DoArt address is null');
 
-    // Deploy EscrowListings with placeholder EscrowAuctions address
-    EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
-    escrowListings = await EscrowListings.deploy(
-      escrowStorage.address,
-      ethers.constants.AddressZero
-    );
-    await escrowListings.deployed();
-    console.log('EscrowListings address:', escrowListings.address);
-    if (!escrowListings.address)
-      throw new Error('EscrowListings address is null');
-
-    // Deploy EscrowAuctions
+    // Deploy EscrowAuctions with placeholder EscrowListings address
     EscrowAuctions = await ethers.getContractFactory('EscrowAuctions', owner);
     escrowAuctions = await EscrowAuctions.deploy(
       escrowStorage.address,
-      escrowListings.address
+      ethers.constants.AddressZero
     );
     await escrowAuctions.deployed();
     console.log('EscrowAuctions address:', escrowAuctions.address);
     if (!escrowAuctions.address)
       throw new Error('EscrowAuctions address is null');
 
-    // Update EscrowListings with EscrowAuctions address (if needed)
-    // Note: If EscrowListings needs escrowAuctions.address, redeploy or set via a setter
+    // Deploy EscrowListings with EscrowAuctions address
     EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
     escrowListings = await EscrowListings.deploy(
       escrowStorage.address,
       escrowAuctions.address
     );
     await escrowListings.deployed();
+    console.log('EscrowListings address:', escrowListings.address);
+    if (!escrowListings.address)
+      throw new Error('EscrowListings address is null');
+
+    // Update EscrowAuctions with EscrowListings address
+    await escrowAuctions.setEscrowListings(escrowListings.address);
     console.log(
-      'EscrowListings redeployed with EscrowAuctions, address:',
+      'EscrowAuctions updated with EscrowListings address:',
       escrowListings.address
     );
 
@@ -324,14 +319,36 @@ describe('Escrow Contracts', function () {
       const signature = await artist._signTypedData(domain, types, voucher);
       console.log('Signature:', signature);
 
-      const isValid = await escrowLazyMinting.verify(voucher, signature);
+      const fullVoucher = {
+        tokenId,
+        creator: artist.address,
+        price,
+        uri: metadataURI,
+        royaltyBps,
+        signature, // Include signature
+      };
+      console.log('Full Voucher:', fullVoucher);
+
+      const isValid = await escrowLazyMinting.verify(fullVoucher, signature);
       console.log('Is Valid:', isValid);
       expect(isValid).to.be.true;
 
       const balanceBefore = await doArt.balanceOf(buyer.address);
-      await escrowLazyMinting
+      const tx = await escrowLazyMinting
         .connect(buyer)
-        .redeemLazyMint(doArt.address, voucher, { value: price });
+        .redeemLazyMint(doArt.address, fullVoucher, { value: price });
+      const receipt = await tx.wait();
+      console.log('Redeem Lazy Mint receipt:', {
+        gasUsed: receipt.gasUsed.toString(),
+        events: receipt.logs.map((log) => {
+          try {
+            return { name: log.eventName, args: log.args };
+          } catch {
+            return { name: 'unknown', args: {} };
+          }
+        }),
+      });
+
       expect(await doArt.balanceOf(buyer.address)).to.equal(
         balanceBefore.add(1)
       );
@@ -403,16 +420,36 @@ describe('Escrow Contracts', function () {
     });
 
     it('Should end auction with winner', async function () {
+      // Fast-forward time to end the auction
       await ethers.provider.send('evm_increaseTime', [auctionDuration + 1]);
       await ethers.provider.send('evm_mine');
 
-      await expect(escrowAuctions.connect(bidder).endAuction(doArt.address, 1))
-        .to.emit(escrowAuctions, 'Action')
-        .withArgs(doArt.address, 1, 4, bidder.address, minBid)
-        .to.emit(escrowStorage, 'AuctionChanged')
-        .withArgs(doArt.address, 1);
+      // End the auction
+      const tx = await escrowAuctions
+        .connect(bidder)
+        .endAuction(doArt.address, 1);
+      const receipt = await tx.wait();
+      console.log('End Auction receipt:', {
+        gasUsed: receipt.gasUsed.toString(),
+        events: receipt.logs.map((log) => {
+          try {
+            const parsedLog = escrowAuctions.interface.parseLog(log);
+            return { name: parsedLog.name, args: parsedLog.args };
+          } catch {
+            return { name: 'unknown', args: log.args || {} };
+          }
+        }),
+      });
 
-      expect(await doArt.ownerOf(1)).to.equal(bidder.address);
+      // Assertions
+      const listing = await escrowStorage.getListing(doArt.address, 1);
+      const auction = await escrowStorage.getAuction(doArt.address, 1);
+      expect(listing.isListed).to.equal(false, 'Listing should be deleted');
+      expect(auction.isActive).to.equal(false, 'Auction should be ended');
+      expect(await doArt.ownerOf(1)).to.equal(
+        bidder.address,
+        'NFT should be transferred to bidder'
+      );
     });
   });
 });

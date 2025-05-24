@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "./EscrowStorage.sol";
+import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 
@@ -188,6 +189,13 @@ contract EscrowListings {
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 8, msg.sender, newListing.viewingPeriodEnd);
     }
+function transferForAuction(address nftContract, uint256 tokenId, address to) external {
+    console.log("transferForAuction: msg.sender =", msg.sender);
+    console.log("transferForAuction: escrowAuctions =", escrowAuctions);
+    require(msg.sender == escrowAuctions, "Only EscrowAuctions");
+    require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
+    IERC721(nftContract).transferFrom(address(this), to, tokenId);
+}
 
     function _calculateRoyalty(address nftContract, uint256 tokenId, uint256 salePrice)
         internal
