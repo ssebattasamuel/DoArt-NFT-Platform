@@ -1,5 +1,6 @@
 // src/services/apiArtNfts.js
 import { ethers } from 'ethers';
+import axios from 'axios';
 import DoArtABI from '../abis/DoArt.json';
 import EscrowListingsABI from '../abis/EscrowListings.json';
 import EscrowAuctionsABI from '../abis/EscrowAuctions.json';
@@ -8,6 +9,32 @@ import config from '../config';
 
 const chainId = import.meta.env.VITE_CHAIN_ID;
 const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
+const PINATA_API_KEY = 'YOUR_PINATA_API_KEY'; // Replace with your key
+const PINATA_SECRET_KEY = 'YOUR_PINATA_SECRET_KEY'; // Replace with your key
+
+async function uploadToPinata(file, isJson = false) {
+  const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
+  const formData = new FormData();
+  if (isJson) {
+    formData.append(
+      'file',
+      new Blob([JSON.stringify(file)], { type: 'application/json' }),
+      'metadata.json'
+    );
+  } else {
+    formData.append('file', file);
+  }
+
+  const response = await axios.post(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      pinata_api_key: PINATA_API_KEY,
+      pinata_secret_api_key: PINATA_SECRET_KEY,
+    },
+  });
+
+  return `ipfs://${response.data.IpfsHash}`;
+}
 
 export async function getArtNfts() {
   const escrowStorage = new ethers.Contract(
@@ -63,10 +90,11 @@ export async function createEditNft(nftData, id) {
   );
 
   const { title, purchasePrice, description, image } = nftData;
-  // Pseudo-code: Upload image to IPFS (use Pinata/Infura)
-  const imageUri = 'ipfs://example';
+  // Upload image to Pinata
+  const imageUri = await uploadToPinata(image);
   const metadata = { title, description, image: imageUri };
-  const metadataUri = 'ipfs://metadata'; // Upload metadata to IPFS
+  // Upload metadata to Pinata
+  const metadataUri = await uploadToPinata(metadata, true);
 
   const tx = await doArt.mint(
     signer.getAddress(),
