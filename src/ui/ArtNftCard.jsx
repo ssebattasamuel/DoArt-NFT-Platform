@@ -6,20 +6,23 @@ import DoArtABI from '../abis/DoArt.json';
 import EscrowListingsABI from '../abis/EscrowListings.json';
 import EscrowAuctionsABI from '../abis/EscrowAuctions.json';
 import config from '../config';
+import Button from './Button';
+import { formatCurrency } from '../utils/helpers';
 
 const Card = styled.div`
   background: var(--color-grey-0);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: border-radius: 0.4rem;
+  transition: transform 0.3s, box-shadow: 0.4rem;
+  margin-bottom: 2rem;
   width: 100%;
   max-width: 300px;
   margin: 1rem;
 
   &:hover {
     transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-lg);
   }
 `;
 
@@ -52,33 +55,24 @@ const Status = styled.div`
   color: var(--color-grey-500);
 `;
 
-const Button = styled.button`
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-brand-500);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: var(--color-brand-600);
-  }
-
-  &:disabled {
-    background: var(--color-grey-400);
-    cursor: not-allowed;
-  }
-`;
-
 const ArtNftCard = ({ nft, provider, signer }) => {
   const { contractAddress, tokenId, listing, auction, metadata } = nft;
   const chainId = import.meta.env.VITE_CHAIN_ID;
   const queryClient = useQueryClient();
 
-  const doArt = new ethers.Contract(config[chainId].doArt.address, DoArtABI.abi, signer);
+  if (!signer || !provider) {
+    return (
+      <Card>
+        <Info>Connect wallet to view NFT actions</Info>
+      </Card>
+    );
+  }
+
+  const doArt = new ethers.Contract(
+    config[chainId].doArt.address,
+    DoArtABI.abi,
+    signer
+  );
   const escrowListings = new ethers.Contract(
     config[chainId].escrowListings.address,
     EscrowListingsABI.abi,
@@ -96,29 +90,42 @@ const ArtNftCard = ({ nft, provider, signer }) => {
         value: listing.escrowAmount,
       });
       await tx.wait();
-      const approveTx = await escrowListings.approveArtwork(contractAddress, tokenId, true);
+      const approveTx = await escrowListings.approveArtwork(
+        contractAddress,
+        tokenId,
+        true
+      );
       await approveTx.wait();
     },
     onSuccess: () => {
       toast.success('Purchase successful!');
       queryClient.invalidateQueries(['artnfts']);
     },
-    onError: (error) => toast.error(`Purchase failed: ${error.message}`);
+    onError: (error) => {
+      toast.error(`Purchase failed: ${error.message}`);
+    },
   });
 
   const bidMutation = useMutation({
     mutationFn: async () => {
       const bidAmount = ethers.utils.parseEther('0.11'); // Example bid
-      const tx = await escrowAuctions.placeBid(contractAddress, [tokenId], [bidAmount], {
-        value: bidAmount,
-      });
+      const tx = await escrowAuctions.placeBid(
+        contractAddress,
+        [tokenId],
+        [bidAmount],
+        {
+          value: bidAmount,
+        }
+      );
       await tx.wait();
     },
     onSuccess: () => {
       toast.success('Bid placed!');
       queryClient.invalidateQueries(['artnfts']);
     },
-    onError: (error) => toast.error(`Bid failed: ${error.message}`);
+    onError: (error) => {
+      toast.error(`Bid failed: ${error.message}`);
+    },
   });
 
   return (
@@ -131,18 +138,35 @@ const ArtNftCard = ({ nft, provider, signer }) => {
         <Title>{metadata?.title || `Token #${tokenId}`}</Title>
         {listing.isListed && !auction.isActive ? (
           <>
-            <Price>{ethers.utils.formatEther(listing.price)} ETH</Price>
+            <Price>
+              {formatCurrency(ethers.utils.formatEther(listing.price), 'ETH')}
+            </Price>
             <Status>For Sale</Status>
-            <Button onClick={() => buyMutation.mutate()} disabled={buyMutation.isLoading}>
+            <Button
+              onClick={() => buyMutation.mutate()}
+              disabled={buyMutation.isLoading}
+              variation="primary"
+              size="medium"
+            >
               {buyMutation.isLoading ? 'Processing...' : 'Buy Now'}
             </Button>
           </>
         ) : auction.isActive ? (
           <>
-            <Price>{ethers.utils.formatEther(auction.highestBid)} ETH</Price>
+            <Price>
+              {formatCurrency(
+                ethers.utils.formatEther(auction.highestBid),
+                'ETH'
+              )}
+            </Price>
             <Status>Highest Bid</Status>
-            <Button onClick={() => bidMutation.mutate()} disabled={bidMutation.isLoading}>
-              {bidMutation.isLoading ? 'Processing...' : 'Place Bid'}
+            <Button
+              onClick={() => bidMutation.mutate()}
+              disabled={bidMutation.isLoading}
+              variation="primary"
+              size="medium"
+            >
+              {buyMutation.isLoading ? 'Processing...' : 'Place Bid'}
             </Button>
           </>
         ) : (
