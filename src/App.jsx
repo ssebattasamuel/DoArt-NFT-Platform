@@ -73,7 +73,9 @@ function App() {
             element={
               <AppLayout
                 provider={provider}
+                setProvider={setProvider}
                 signer={signer}
+                setSigner={setSigner}
                 account={account}
               />
             }
