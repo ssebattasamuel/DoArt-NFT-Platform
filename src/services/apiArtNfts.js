@@ -1,4 +1,3 @@
-// src/services/apiArtNfts.js
 import { ethers } from 'ethers';
 import axios from 'axios';
 import DoArtABI from '../abis/DoArt.json';
@@ -9,8 +8,8 @@ import config from '../config';
 
 const chainId = import.meta.env.VITE_CHAIN_ID;
 const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
-const PINATA_API_KEY = 'YOUR_PINATA_API_KEY'; // Replace with your key
-const PINATA_SECRET_KEY = 'YOUR_PINATA_SECRET_KEY'; // Replace with your key
+const PINATA_API_KEY = import.meta.env.VITE_PINATA_API_KEY;
+const PINATA_SECRET_KEY = import.meta.env.VITE_PINATA_SECRET_KEY;
 
 async function uploadToPinata(file, isJson = false) {
   const url = 'https://api.pinata.cloud/pinning/pinFileToIPFS';
@@ -25,15 +24,18 @@ async function uploadToPinata(file, isJson = false) {
     formData.append('file', file);
   }
 
-  const response = await axios.post(url, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      pinata_api_key: PINATA_API_KEY,
-      pinata_secret_api_key: PINATA_SECRET_KEY,
-    },
-  });
-
-  return `ipfs://${response.data.IpfsHash}`;
+  try {
+    const response = await axios.post(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        pinata_api_key: PINATA_API_KEY,
+        pinata_secret_api_key: PINATA_SECRET_KEY,
+      },
+    });
+    return `ipfs://${response.data.IpfsHash}`;
+  } catch (error) {
+    throw new Error(`Pinata upload failed: ${error.message}`);
+  }
 }
 
 export async function getArtNfts() {
@@ -58,8 +60,16 @@ export async function getArtNfts() {
       const isListed = listing.isListed;
       const price = listing.price;
       const escrowAmount = listing.escrowAmount;
-      const uri = await doArt.tokenURI(tokenId);
-      const metadata = await (await fetch(uri)).json();
+      let uri, metadata;
+      try {
+        uri = await doArt.tokenURI(tokenId);
+        metadata = await (await fetch(uri)).json();
+      } catch (error) {
+        console.error(
+          `Failed to fetch metadata for token ${tokenId}: ${error.message}`
+        );
+        metadata = { title: `Token #${tokenId}`, image: '' };
+      }
 
       const auction = auctions.find(
         (a) =>
@@ -92,15 +102,22 @@ export async function createEditNft(nftData, id) {
   const { title, purchasePrice, description, image } = nftData;
   // Upload image to Pinata
   const imageUri = await uploadToPinata(image);
-  const metadata = { title, description, image: imageUri };
+  const metadata = { name: title, description, image: imageUri };
   // Upload metadata to Pinata
   const metadataUri = await uploadToPinata(metadata, true);
 
-  const tx = await doArt.mint(
-    signer.getAddress(),
-    metadataUri,
-    ethers.utils.parseEther(purchasePrice)
-  );
+  let tx;
+  if (!id) {
+    // Create new NFT
+    tx = await doArt.mint(
+      signer.getAddress(),
+      metadataUri,
+      ethers.utils.parseEther(purchasePrice)
+    );
+  } else {
+    // Edit existing NFT (if supported by contract; placeholder)
+    throw new Error('Editing NFTs not supported in current contract');
+  }
   await tx.wait();
   return { id: tx.hash, ...nftData };
 }
