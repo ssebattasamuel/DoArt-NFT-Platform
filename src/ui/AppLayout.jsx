@@ -22,14 +22,14 @@ const Container = styled.div`
   gap: 3.2rem;
 `;
 
-function AppLayout() {
+function AppLayout({ provider, setProvider, signer, setSigner }) {
   return (
     <StyledAppLayout>
-      <Header />
+      <Header setProvider={setProvider} setSigner={setSigner} />
       <SideBar />
       <Main>
         <Container>
-          <Outlet />
+          <Outlet context={{ provider, signer }} />
         </Container>
       </Main>
     </StyledAppLayout>
