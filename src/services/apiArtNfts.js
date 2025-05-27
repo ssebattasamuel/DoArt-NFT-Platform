@@ -1,56 +1,92 @@
-import supabase, { supabaseUrl } from './supabase';
+// src/services/apiArtNfts.js
+import { ethers } from 'ethers';
+import DoArtABI from '../abis/DoArt.json';
+import EscrowListingsABI from '../abis/EscrowListings.json';
+import EscrowAuctionsABI from '../abis/EscrowAuctions.json';
+import EscrowStorageABI from '../abis/EscrowStorage.json';
+import config from '../config';
+
+const chainId = import.meta.env.VITE_CHAIN_ID;
+const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
 
 export async function getArtNfts() {
-  const { data, error } = await supabase.from('artnfts').select('*');
-  if (error) {
-    console.error(error);
-    throw new Error('ArtNfts could not be loaded');
-  }
-  return data;
+  const escrowStorage = new ethers.Contract(
+    config[chainId].escrowStorage.address,
+    EscrowStorageABI.abi,
+    provider
+  );
+  const doArt = new ethers.Contract(
+    config[chainId].doArt.address,
+    DoArtABI.abi,
+    provider
+  );
+
+  const listings = await escrowStorage.getListings();
+  const auctions = await escrowStorage.getAuctions();
+
+  return Promise.all(
+    listings.map(async (listing) => {
+      const tokenId = listing.tokenId.toString();
+      const contractAddress = listing.contractAddress;
+      const isListed = listing.isListed;
+      const price = listing.price;
+      const escrowAmount = listing.escrowAmount;
+      const uri = await doArt.tokenURI(tokenId);
+      const metadata = await (await fetch(uri)).json();
+
+      const auction = auctions.find(
+        (a) =>
+          a.contractAddress === contractAddress &&
+          a.tokenId.toString() === tokenId
+      );
+
+      return {
+        contractAddress,
+        tokenId,
+        listing: { isListed, price, escrowAmount, uri },
+        auction: auction
+          ? { isActive: auction.isActive, highestBid: auction.highestBid }
+          : { isActive: false, highestBid: ethers.BigNumber.from(0) },
+        metadata,
+      };
+    })
+  );
 }
-export async function deleteNft(id) {
-  const { data, error } = await supabase.from('cabins').delete().eq('id', id);
 
-  if (error) {
-    console.error(error);
-    throw new Error('ArtNfts could not be deleted');
-  }
-  return data;
+export async function createEditNft(nftData, id) {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  const doArt = new ethers.Contract(
+    config[chainId].doArt.address,
+    DoArtABI.abi,
+    signer
+  );
+
+  const { title, purchasePrice, description, image } = nftData;
+  // Pseudo-code: Upload image to IPFS (use Pinata/Infura)
+  const imageUri = 'ipfs://example';
+  const metadata = { title, description, image: imageUri };
+  const metadataUri = 'ipfs://metadata'; // Upload metadata to IPFS
+
+  const tx = await doArt.mint(
+    signer.getAddress(),
+    metadataUri,
+    ethers.utils.parseEther(purchasePrice)
+  );
+  await tx.wait();
+  return { id: tx.hash, ...nftData };
 }
-export async function createEditNft(newNft, id) {
-  const hasImagePath = newNft.image?.startsWith?.(supabaseUrl);
-  const imageName = `${Math.random()}-${newNft.image.name}`.replaceAll('/', '');
 
-  const imagePath = hasImagePath
-    ? newNft.image
-    : `${supabaseUrl}/storage/v1/object/public/artnfts/${imageName}`;
-  /*https://bsuyufmblsdloxdxwpbs.supabase.co/storage/v1/object/public/artnfts/cabin-001.jpg*/
+export async function cancelListing({ contractAddress, tokenId }) {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  const escrowListings = new ethers.Contract(
+    config[chainId].escrowListings.address,
+    EscrowListingsABI.abi,
+    signer
+  );
 
-  //1. Create/Edit Nft
-  let query = supabase.from('artnfts');
-
-  //A. CREATE
-  if (!id) query = query.insert([{ ...newNft, image: imagePath }]);
-
-  //B. EDIT
-  if (id) query = query.update({ ...newNft, image: imagePath }).eq('id', id);
-
-  const { data, error } = await query.select().single();
-
-  if (error) {
-    console.error(error);
-    throw new Error('Nft could not be created');
-  }
-  // 2.Upload image
-  const { error: storageError } = await supabase.storage
-    .from('artnfts')
-    .upload(imageName, newNft.image);
-  //Delete the cabin if there was an error Uploading the image
-  if (storageError) {
-    await supabase.from('artnfts').delete().eq('id', data.id);
-    throw new Error(
-      'Nft image could not be uploaded and the artnft was not created'
-    );
-  }
-  return data;
+  const tx = await escrowListings.cancelListing(contractAddress, tokenId);
+  await tx.wait();
+  return { contractAddress, tokenId };
 }
