@@ -1,3 +1,4 @@
+// src/hooks/useNfts.js
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import EscrowStorageABI from '../abis/EscrowStorage.json';
@@ -22,7 +23,6 @@ export function useNfts() {
       provider
     );
 
-    // Fetch listings and auctions
     const listings = await escrowStorage.getListings();
     const auctions = await escrowStorage.getAuctions();
 
@@ -33,8 +33,16 @@ export function useNfts() {
         const isListed = listing.isListed;
         const price = listing.price;
         const escrowAmount = listing.escrowAmount;
-        const uri = await doArt.tokenURI(tokenId);
-        const metadata = await (await fetch(uri)).json();
+        let uri, metadata;
+        try {
+          uri = await doArt.tokenURI(tokenId);
+          metadata = await (await fetch(uri)).json();
+        } catch (error) {
+          console.error(
+            `Failed to fetch metadata for token ${tokenId}: ${error.message}`
+          );
+          metadata = { title: `Token #${tokenId}`, image: '' };
+        }
 
         const auction = auctions.find(
           (a) =>
