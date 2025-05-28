@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
 } from 'react-router-dom';
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
@@ -13,11 +14,11 @@ import GlobalStyles from './styles/GlobalStyles';
 import AppLayout from './ui/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Gallery from './pages/Gallery';
-import Minting from './pages/Minting';
+import toast from 'react-hot-toast';
 import PageNotFound from './pages/PageNotFound';
-import Login from './pages/Login';
+
 import Settings from './pages/Settings';
-import Users from './pages/Users';
+
 import Account from './pages/Account';
 import Trades from './pages/Trades';
 
@@ -85,11 +86,10 @@ function App() {
             <Route path="trades" element={<Trades />} />
             <Route path="account" element={<Account />} />
             <Route path="gallery" element={<Gallery />} />
-            <Route path="minting" element={<Minting />} />
+
             <Route path="settings" element={<Settings />} />
-            <Route path="users" element={<Users />} />
           </Route>
-          <Route path="login" element={<Login />} />
+
           <Route path="*" element={<PageNotFound />} />
         </Routes>
       </Router>

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createEditNft } from '../../services/apiArtNfts';
+import { createEditNft } from '../services/apiArtNfts';
 import toast from 'react-hot-toast';
 
 export function useEditNft() {
