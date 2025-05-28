@@ -1,4 +1,3 @@
-// src/pages/Account.jsx
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import styled from 'styled-components';
@@ -47,11 +46,12 @@ function Account({ provider, signer }) {
 
   useEffect(() => {
     const fetchAccount = async () => {
-      if (signer) {
+      if (!signer || !provider) return;
+
+      try {
         const address = await signer.getAddress();
         setAccount(address);
 
-        // Fetch owned NFTs
         const chainId = import.meta.env.VITE_CHAIN_ID;
         const doArt = new ethers.Contract(
           config[chainId].doArt.address,
@@ -61,10 +61,15 @@ function Account({ provider, signer }) {
         const balance = await doArt.balanceOf(address);
         const ownedNfts = [];
 
-        for (let i = 0; i < balance; i++) {
+        for (let i = 0; i < balance.toNumber(); i++) {
           const tokenId = await doArt.tokenOfOwnerByIndex(address, i);
           const uri = await doArt.tokenURI(tokenId);
-          const metadata = await (await fetch(uri)).json();
+          let metadata;
+          try {
+            metadata = await (await fetch(uri)).json();
+          } catch {
+            metadata = { title: `Token #${tokenId}`, image: '' };
+          }
           ownedNfts.push({
             contractAddress: config[chainId].doArt.address,
             tokenId: tokenId.toString(),
@@ -74,6 +79,8 @@ function Account({ provider, signer }) {
           });
         }
         setNfts(ownedNfts);
+      } catch (error) {
+        console.error('Failed to fetch account:', error);
       }
     };
     fetchAccount();
