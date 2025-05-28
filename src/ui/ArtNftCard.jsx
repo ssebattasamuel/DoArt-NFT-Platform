@@ -13,9 +13,10 @@ const Card = styled.div`
   background: var(--color-grey-0);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: border-radius: 0.4rem;
-  transition: transform 0.3s, box-shadow: 0.4rem;
-  margin-bottom: 2rem;
+  box-shadow: var(--shadow-md);
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
   width: 100%;
   max-width: 300px;
   margin: 1rem;
@@ -60,32 +61,13 @@ const ArtNftCard = ({ nft, provider, signer }) => {
   const chainId = import.meta.env.VITE_CHAIN_ID;
   const queryClient = useQueryClient();
 
-  if (!signer || !provider) {
-    return (
-      <Card>
-        <Info>Connect wallet to view NFT actions</Info>
-      </Card>
-    );
-  }
-
-  const doArt = new ethers.Contract(
-    config[chainId].doArt.address,
-    DoArtABI.abi,
-    signer
-  );
-  const escrowListings = new ethers.Contract(
-    config[chainId].escrowListings.address,
-    EscrowListingsABI.abi,
-    signer
-  );
-  const escrowAuctions = new ethers.Contract(
-    config[chainId].escrowAuctions.address,
-    EscrowAuctionsABI.abi,
-    signer
-  );
-
   const buyMutation = useMutation({
     mutationFn: async () => {
+      const escrowListings = new ethers.Contract(
+        config[chainId].escrowListings.address,
+        EscrowListingsABI.abi,
+        signer
+      );
       const tx = await escrowListings.depositEarnest(contractAddress, tokenId, {
         value: listing.escrowAmount,
       });
@@ -108,7 +90,12 @@ const ArtNftCard = ({ nft, provider, signer }) => {
 
   const bidMutation = useMutation({
     mutationFn: async () => {
-      const bidAmount = ethers.utils.parseEther('0.11'); // Example bid
+      const escrowAuctions = new ethers.Contract(
+        config[chainId].escrowAuctions.address,
+        EscrowAuctionsABI.abi,
+        signer
+      );
+      const bidAmount = ethers.utils.parseEther('0.11');
       const tx = await escrowAuctions.placeBid(
         contractAddress,
         [tokenId],
@@ -127,6 +114,14 @@ const ArtNftCard = ({ nft, provider, signer }) => {
       toast.error(`Bid failed: ${error.message}`);
     },
   });
+
+  if (!signer || !provider) {
+    return (
+      <Card>
+        <Info>Connect wallet to view NFT actions</Info>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -166,7 +161,7 @@ const ArtNftCard = ({ nft, provider, signer }) => {
               variation="primary"
               size="medium"
             >
-              {buyMutation.isLoading ? 'Processing...' : 'Place Bid'}
+              {bidMutation.isLoading ? 'Processing...' : 'Place Bid'}
             </Button>
           </>
         ) : (
