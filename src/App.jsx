@@ -10,7 +10,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Toaster } from 'react-hot-toast';
 import GlobalStyles from './styles/GlobalStyles';
-import AppLayout from './components/AppLayout';
+import AppLayout from './ui/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Gallery from './pages/Gallery';
 import Minting from './pages/Minting';
