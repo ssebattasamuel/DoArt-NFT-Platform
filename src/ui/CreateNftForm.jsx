@@ -1,18 +1,16 @@
-import Input from '../../ui/Input';
-import Form from '../../ui/Form';
-import Button from '../../ui/Button';
-import FileInput from '../../ui/FileInput';
-import Textarea from '../../ui/Textarea';
-import FormRow from '../../ui/FormRow';
 import { useForm } from 'react-hook-form';
-import { useCreateNft } from './useCreateNft';
-import { useEditNft } from './useEditNft';
+import Button from './Button';
+import FileInput from './FileInput';
+import Form from './Form';
+import FormRow from './FormRow';
+import Input from './Input';
+import Textarea from './Textarea';
+import { useCreateNft } from '../hooks/useCreateNft';
+import { useEditNft } from '../hooks/useEditNft';
 
 function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
-  const { isCreating, createNft } = useCreateNft();
-
-  const { isEditing, editNft } = useEditNft();
-
+  const { isCreating, createEditNft: createNft } = useCreateNft();
+  const { isEditing, createEditNft: editNft } = useEditNft();
   const isWorking = isCreating || isEditing;
 
   const { id: editId, ...editValues } = nftToEdit;
@@ -26,26 +24,27 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
   function onSubmit(data) {
     const image = typeof data.image === 'string' ? data.image : data.image[0];
 
-    if (isEditSession)
+    if (isEditSession) {
       editNft(
-        { newNftData: { ...data }, image, id: editId },
+        { newNftData: { ...data, image }, id: editId },
         {
-          onSuccess: (data) => {
+          onSuccess: () => {
             reset();
             onCloseModal?.();
           },
         }
       );
-    else
+    } else {
       createNft(
-        { ...data, image: image },
+        { ...data, image },
         {
-          onSuccess: (data) => {
+          onSuccess: () => {
             reset();
             onCloseModal?.();
           },
         }
       );
+    }
   }
 
   return (
@@ -53,57 +52,61 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
       onSubmit={handleSubmit(onSubmit)}
       type={onCloseModal ? 'modal' : 'regular'}
     >
-      <FormRow label="Nft title" error={errors?.title?.message}>
+      <FormRow label="NFT title" error={errors?.title?.message}>
         <Input
           type="text"
           id="title"
           disabled={isWorking}
-          {...register('title', { required: 'This Field is required' })}
+          {...register('title', { required: 'This field is required' })}
         />
       </FormRow>
 
-      <FormRow label="Purchase price" error={errors?.purchasePrice?.message}>
+      <FormRow
+        label="Purchase price (ETH)"
+        error={errors?.purchasePrice?.message}
+      >
         <Input
           type="number"
           id="purchasePrice"
           disabled={isWorking}
           {...register('purchasePrice', {
-            required: 'This Field is required',
-            validate: (value) => value > 0 || 'Price can not be zero',
+            required: 'This field is required',
+            validate: (value) => value > 0 || 'Price cannot be zero',
           })}
         />
       </FormRow>
 
-      <FormRow label="Description of art" error={errors?.descripton?.message}>
+      <FormRow label="Description" error={errors?.description?.message}>
         <Textarea
-          type="text"
           id="description"
-          defaultValue=""
           disabled={isWorking}
-          {...register('description', { required: 'This Field is required' })}
+          {...register('description', { required: 'This field is required' })}
         />
       </FormRow>
 
-      <FormRow label="Nft Image">
+      <FormRow label="NFT Image" error={errors?.image?.message}>
         <FileInput
           id="image"
           accept="image/*"
+          disabled={isWorking}
           {...register('image', {
-            required: isEditSession ? false : 'This Field is required',
+            required: isEditSession ? false : 'This field is required',
           })}
         />
       </FormRow>
 
       <FormRow>
-        {/* type is an HTML attribute! */}
         <Button
           variation="secondary"
           type="reset"
           onClick={() => onCloseModal?.()}
+          disabled={isWorking}
         >
           Cancel
         </Button>
-        <Button disabled={isCreating}>Mint</Button>
+        <Button disabled={isWorking}>
+          {isEditSession ? 'Update NFT' : 'Mint NFT'}
+        </Button>
       </FormRow>
     </Form>
   );
