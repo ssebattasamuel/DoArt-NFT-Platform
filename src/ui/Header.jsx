@@ -1,6 +1,8 @@
+// src/ui/Header.jsx
 import styled from 'styled-components';
 import { ethers } from 'ethers';
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import Button from './Button';
 import Logo from './Logo';
 
@@ -18,20 +20,26 @@ const WalletInfo = styled.div`
   color: var(--color-grey-600);
 `;
 
-function Header({ setProvider, setSigner }) {
-  const [account, setAccount] = useState(null);
-
+function Header({ setProvider, setSigner, setAccount, account }) {
   const connectWallet = async () => {
-    if (window.ethereum) {
+    try {
+      if (!window.ethereum) {
+        toast.error('Please install MetaMask!');
+        return;
+      }
+
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send('eth_requestAccounts', []);
       const signer = provider.getSigner();
       const address = await signer.getAddress();
+
       setProvider(provider);
       setSigner(signer);
       setAccount(address);
-    } else {
-      alert('Please install MetaMask!');
+      toast.success(`Connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
+    } catch (error) {
+      console.error('Wallet connection failed:', error);
+      toast.error('Failed to connect wallet.');
     }
   };
 
