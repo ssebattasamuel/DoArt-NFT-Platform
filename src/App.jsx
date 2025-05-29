@@ -6,6 +6,7 @@ import {
   Navigate,
   Route,
   Routes,
+  unstable_createRouter as createRouter,
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -39,12 +40,9 @@ function App() {
       try {
         let web3Provider;
 
-        // Try MetaMask first
         if (window.ethereum) {
           web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-          // Don't auto-connect; wait for Header.jsx to trigger
         } else {
-          // Fallback to Hardhat
           console.warn('MetaMask not detected. Using Hardhat node.');
           web3Provider = new ethers.providers.JsonRpcProvider(
             'http://127.0.0.1:8545'
@@ -70,7 +68,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ReactQueryDevtools initialIsOpen={false} />
       <GlobalStyles />
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route
             element={
