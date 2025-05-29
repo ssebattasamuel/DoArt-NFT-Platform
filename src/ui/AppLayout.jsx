@@ -1,3 +1,4 @@
+// src/ui/AppLayout.jsx
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import SideBar from './SideBar';
@@ -8,12 +9,14 @@ const Main = styled.main`
   padding: 4rem 4.8rem 6.4rem;
   overflow: scroll;
 `;
+
 const StyledAppLayout = styled.div`
   display: grid;
   grid-template-columns: 26rem 1fr;
   grid-template-rows: auto 1fr;
   height: 100vh;
 `;
+
 const Container = styled.div`
   max-width: 120rem;
   margin: 0 auto;
@@ -22,10 +25,22 @@ const Container = styled.div`
   gap: 3.2rem;
 `;
 
-function AppLayout({ provider, setProvider, signer, setSigner }) {
+function AppLayout({
+  provider,
+  setProvider,
+  signer,
+  setSigner,
+  account,
+  setAccount,
+}) {
   return (
     <StyledAppLayout>
-      <Header setProvider={setProvider} setSigner={setSigner} />
+      <Header
+        setProvider={setProvider}
+        setSigner={setSigner}
+        account={account}
+        setAccount={setAccount}
+      />
       <SideBar />
       <Main>
         <Container>
