@@ -1,3 +1,4 @@
+// src/ui/Button.jsx
 import styled, { css } from 'styled-components';
 
 const sizes = {
@@ -11,7 +12,7 @@ const sizes = {
   medium: css`
     font-size: 1.4rem;
     padding: 1.2rem 1.6rem;
-    font-weight: 500;
+    font-weight: 600;
   `,
   large: css`
     font-size: 1.6rem;
@@ -47,13 +48,31 @@ const variations = {
     }
   `,
 };
-const Button = styled.button`
+
+const Button = styled.button.withConfig({
+  shouldForwardProp: (prop) => !['variation', 'size'].includes(prop),
+})`
   border: none;
-  border-radius: var(--border-radius-sm);
+  border-radius: 4rem;
   box-shadow: var(--shadow-sm);
   ${(props) => sizes[props.size]}
   ${(props) => variations[props.variation]}
 `;
+
+function Button({
+  children,
+  onClick,
+  variation = 'primary',
+  size = 'medium',
+  ...props
+}) {
+  return (
+    <Button onClick={onClick} variation={variation} size={size} {...props}>
+      {children}
+    </Button>
+  );
+}
+
 Button.defaultProps = {
   variation: 'primary',
   size: 'medium',
