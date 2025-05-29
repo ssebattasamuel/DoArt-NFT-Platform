@@ -12,7 +12,7 @@ const sizes = {
   medium: css`
     font-size: 1.4rem;
     padding: 1.2rem 1.6rem;
-    font-weight: 600;
+    font-weight: 500;
   `,
   large: css`
     font-size: 1.6rem;
@@ -49,11 +49,11 @@ const variations = {
   `,
 };
 
-const Button = styled.button.withConfig({
+const StyledButton = styled.button.withConfig({
   shouldForwardProp: (prop) => !['variation', 'size'].includes(prop),
 })`
   border: none;
-  border-radius: 4rem;
+  border-radius: var(--border-radius-sm);
   box-shadow: var(--shadow-sm);
   ${(props) => sizes[props.size]}
   ${(props) => variations[props.variation]}
@@ -67,9 +67,14 @@ function Button({
   ...props
 }) {
   return (
-    <Button onClick={onClick} variation={variation} size={size} {...props}>
+    <StyledButton
+      onClick={onClick}
+      variation={variation}
+      size={size}
+      {...props}
+    >
       {children}
-    </Button>
+    </StyledButton>
   );
 }
 
