@@ -39,42 +39,49 @@ const StatValue = styled.p`
 function Dashboard({ provider }) {
   const chainId = import.meta.env.VITE_CHAIN_ID;
 
-  const fetchStats = async () => {
-    const doArt = new ethers.Contract(
-      config[chainId].doArt.address,
-      DoArtABI.abi,
-      provider
-    );
-    const escrowStorage = new ethers.Contract(
-      config[chainId].escrowStorage.address,
-      EscrowStorageABI.abi,
-      provider
-    );
-
-    const totalNfts = (await doArt.totalSupply()).toString();
-    const listings = await escrowStorage.getListings();
-    const activeListings = listings.filter((l) => l.isListed).length;
-    const auctions = await escrowStorage.getAuctions();
-    const activeAuctions = auctions.filter((a) => a.isActive).length;
-
-    // Fetch total volume from Transfer events
-    const filter = doArt.filters.Transfer();
-    const events = await doArt.queryFilter(filter, 0, 'latest');
-    const totalVolume = events.reduce((sum, event) => {
-      // Assume value in event (simplified; adjust based on your contract)
-      return sum.add(event.args.value || ethers.BigNumber.from(0));
-    }, ethers.BigNumber.from(0));
-
-    return { totalNfts, activeListings, activeAuctions, totalVolume };
-  };
-
   const {
-    data: stats,
     isLoading,
+    data: stats,
     error,
   } = useQuery({
     queryKey: ['dashboardStats'],
-    queryFn: fetchStats,
+    queryFn: async () => {
+      if (!provider) throw new Error('Provider not available');
+
+      const doArt = new ethers.Contract(
+        config[chainId].doArt.address,
+        DoArtABI.abi, // Fixed
+        provider
+      );
+      const escrowStorage = new ethers.Contract(
+        config[chainId].escrowStorage.address,
+        EscrowStorageABI.abi, // Fixed
+        provider
+      );
+
+      const [totalNfts, listings, auctions, filter] = await Promise.all([
+        escrowStorage.getTotalNfts(),
+        escrowStorage.getListings(),
+        escrowStorage.getAuctions(),
+        doArt.filters.Transfer(),
+      ]);
+
+      const activeListings = listings.filter((l) => l.isListed).length;
+      const activeAuctions = auctions.filter((a) => a.isActive).length;
+
+      // Fetch total volume from Transfer events
+      const events = await doArt.queryFilter(filter, 0, 'latest');
+      const totalVolume = events.reduce((sum, event) => {
+        return sum.add(event.args.value || ethers.BigNumber.from(0));
+      }, ethers.BigNumber.from(0));
+
+      return {
+        totalNfts: totalNfts.toNumber(),
+        activeListings,
+        activeAuctions,
+        totalVolume,
+      };
+    },
   });
 
   if (isLoading) return <Spinner />;
