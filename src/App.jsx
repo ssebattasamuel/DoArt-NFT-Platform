@@ -41,6 +41,14 @@ function App() {
 
         if (window.ethereum) {
           web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+          // Request accounts on load
+          const accounts = await window.ethereum.request({
+            method: 'eth_accounts',
+          });
+          if (accounts.length > 0) {
+            setAccount(accounts[0]);
+            setSigner(web3Provider.getSigner());
+          }
         } else {
           console.warn('MetaMask not detected. Using Hardhat node.');
           web3Provider = new ethers.providers.JsonRpcProvider(
@@ -49,6 +57,14 @@ function App() {
         }
 
         setProvider(web3Provider);
+
+        // Listen for account changes
+        if (window.ethereum) {
+          window.ethereum.on('accountsChanged', (accounts) => {
+            setAccount(accounts[0] || null);
+            setSigner(accounts[0] ? web3Provider.getSigner() : null);
+          });
+        }
       } catch (error) {
         console.error('Web3 initialization failed:', error);
         setProvider(null);
@@ -58,6 +74,22 @@ function App() {
     };
     initWeb3();
   }, []);
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert('Please install MetaMask!');
+      return;
+    }
+    try {
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+      setAccount(accounts[0]);
+      setSigner(provider.getSigner());
+    } catch (error) {
+      console.error('Wallet connection failed:', error);
+    }
+  };
 
   if (isLoading) {
     return <div>Loading Web3 provider...</div>;
@@ -78,6 +110,7 @@ function App() {
                 setSigner={setSigner}
                 account={account}
                 setAccount={setAccount}
+                connectWallet={connectWallet}
               />
             }
           >
