@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import styled from 'styled-components';
@@ -47,22 +46,24 @@ function Dashboard({ provider }) {
     queryKey: ['dashboardStats'],
     queryFn: async () => {
       if (!provider) throw new Error('Provider not available');
+      if (!EscrowStorageABI.abi || !DoArtABI.abi)
+        throw new Error('Invalid ABI files');
 
       const doArt = new ethers.Contract(
         config[chainId].doArt.address,
-        DoArtABI.abi, // Fixed
+        DoArtABI.abi,
         provider
       );
       const escrowStorage = new ethers.Contract(
         config[chainId].escrowStorage.address,
-        EscrowStorageABI.abi, // Fixed
+        EscrowStorageABI.abi,
         provider
       );
 
       const [totalNfts, listings, auctions, filter] = await Promise.all([
-        escrowStorage.getTotalNfts(),
-        escrowStorage.getListings(),
-        escrowStorage.getAuctions(),
+        escrowStorage.getTotalNfts().catch(() => ethers.BigNumber.from(0)),
+        escrowStorage.getListings().catch(() => []),
+        escrowStorage.getAuctions().catch(() => []),
         doArt.filters.Transfer(),
       ]);
 
@@ -70,7 +71,9 @@ function Dashboard({ provider }) {
       const activeAuctions = auctions.filter((a) => a.isActive).length;
 
       // Fetch total volume from Transfer events
-      const events = await doArt.queryFilter(filter, 0, 'latest');
+      const events = await doArt
+        .queryFilter(filter, 0, 'latest')
+        .catch(() => []);
       const totalVolume = events.reduce((sum, event) => {
         return sum.add(event.args.value || ethers.BigNumber.from(0));
       }, ethers.BigNumber.from(0));
