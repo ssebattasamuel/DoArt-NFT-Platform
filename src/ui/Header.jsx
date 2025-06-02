@@ -50,7 +50,11 @@ function Header({ setProvider, setSigner, setAccount, account }) {
         {account ? (
           `Connected: ${account.slice(0, 6)}...${account.slice(-4)}`
         ) : (
-          <Button onClick={connectWallet}>Connect Wallet</Button>
+          <Button onClick={connectWallet}>
+            {account
+              ? `${account.slice(0, 6)}...${account.slice(-4)}`
+              : 'Connect Wallet'}
+          </Button>
         )}
       </WalletInfo>
     </StyledHeader>
