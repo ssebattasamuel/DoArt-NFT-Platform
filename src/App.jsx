@@ -32,28 +32,75 @@ function App() {
   const [signer, setSigner] = useState(null);
   const [account, setAccount] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const initWeb3 = async () => {
       setIsLoading(true);
+      setError(null);
       try {
         let web3Provider;
 
         if (window.ethereum) {
+          console.log('MetaMask detected, initializing provider...');
           web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-          // Request accounts on load
-          const accounts = await window.ethereum.request({
-            method: 'eth_accounts',
-          });
+
+          // Switch to Hardhat network (chainId: 31337)
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0x7a69' }], // 31337 in hex
+            });
+          } catch (switchError) {
+            if (switchError.code === 4902) {
+              // Chain not added, add Hardhat network
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [
+                  {
+                    chainId: '0x7a69',
+                    chainName: 'Hardhat',
+                    rpcUrls: ['http://127.0.0.1:8545'],
+                    nativeCurrency: {
+                      name: 'ETH',
+                      symbol: 'ETH',
+                      decimals: 18,
+                    },
+                    blockExplorerUrls: null,
+                  },
+                ],
+              });
+            } else {
+              throw switchError;
+            }
+          }
+
+          // Timeout for account request
+          const accounts = await Promise.race([
+            window.ethereum.request({ method: 'eth_accounts' }),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error('MetaMask account request timed out')),
+                5000
+              )
+            ),
+          ]);
           if (accounts.length > 0) {
             setAccount(accounts[0]);
             setSigner(web3Provider.getSigner());
+            console.log('Connected account:', accounts[0]);
           }
         } else {
           console.warn('MetaMask not detected. Using Hardhat node.');
           web3Provider = new ethers.providers.JsonRpcProvider(
             'http://127.0.0.1:8545'
           );
+          // Test Hardhat connection
+          await web3Provider.getBlockNumber().catch(() => {
+            throw new Error(
+              'Hardhat node not running at http://127.0.0.1:8545'
+            );
+          });
         }
 
         setProvider(web3Provider);
@@ -61,12 +108,17 @@ function App() {
         // Listen for account changes
         if (window.ethereum) {
           window.ethereum.on('accountsChanged', (accounts) => {
+            console.log('Accounts changed:', accounts);
             setAccount(accounts[0] || null);
             setSigner(accounts[0] ? web3Provider.getSigner() : null);
           });
+          window.ethereum.on('chainChanged', () => {
+            window.location.reload();
+          });
         }
       } catch (error) {
-        console.error('Web3 initialization failed:', error);
+        console.error('Web3 initialization failed:', error.message);
+        setError(error.message);
         setProvider(null);
       } finally {
         setIsLoading(false);
@@ -81,18 +133,31 @@ function App() {
       return;
     }
     try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts',
-      });
+      console.log('Requesting MetaMask connection...');
+      const accounts = await Promise.race([
+        window.ethereum.request({ method: 'eth_requestAccounts' }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('MetaMask connection timed out')),
+            5000
+          )
+        ),
+      ]);
       setAccount(accounts[0]);
       setSigner(provider.getSigner());
+      console.log('Wallet connected:', accounts[0]);
     } catch (error) {
-      console.error('Wallet connection failed:', error);
+      console.error('Wallet connection failed:', error.message);
+      alert(`Connection failed: ${error.message}`);
     }
   };
 
   if (isLoading) {
     return <div>Loading Web3 provider...</div>;
+  }
+
+  if (error) {
+    return <div>Error initializing Web3: {error}</div>;
   }
 
   return (
