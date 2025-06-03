@@ -4,11 +4,11 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "./DoArt.sol"; // Import DoArt interface
+import "./DoArt.sol";
 
 interface IDoArt {
     function mintFor(address to, string memory metadataURI, uint96 royaltyBps) external returns (uint256);
-    function totalSupply() external view returns (uint256); // Add totalSupply interface
+    function totalSupply() external view returns (uint256);
 }
 
 contract EscrowStorage is AccessControl {
@@ -61,9 +61,8 @@ contract EscrowStorage is AccessControl {
     mapping(address => mapping(uint256 => Auction)) public auctions;
     mapping(address => mapping(uint256 => bool)) public voucherRedeemed;
 
-    IDoArt public doArt; // Add DoArt contract reference
+    IDoArt public doArt;
 
-    // Events
     event ListingChanged(address indexed nftContract, uint256 indexed tokenId);
     event BidChanged(address indexed nftContract, uint256 indexed tokenId);
     event AuctionChanged(address indexed nftContract, uint256 indexed tokenId);
@@ -71,11 +70,33 @@ contract EscrowStorage is AccessControl {
     constructor(address _doArtContract) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
-        doArt = IDoArt(_doArtContract); // Initialize DoArt reference
+        doArt = IDoArt(_doArtContract);
     }
 
     function getTotalNfts() external view returns (uint256) {
-        return doArt.totalSupply(); // Fetch total NFTs from DoArt
+        return doArt.totalSupply();
+    }
+
+    function getListings() external view returns (Listing[] memory) {
+        uint256 totalTokens = doArt.totalSupply();
+        Listing[] memory allListings = new Listing[](totalTokens);
+        uint256 count = 0;
+
+        for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
+            Listing memory listing = listings[address(doArt)][tokenId];
+            if (listing.isListed) {
+                allListings[count] = listing;
+                count++;
+            }
+        }
+
+        // Resize array to fit actual number of listings
+        Listing[] memory result = new Listing[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = allListings[i];
+        }
+
+        return result;
     }
 
     function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
