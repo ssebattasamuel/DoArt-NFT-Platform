@@ -38,6 +38,12 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         _setupRole(MINTER_ROLE, msg.sender);
     }
 
+    // Add function to update storageContract
+    function setStorageContract(address _storageContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_storageContract != address(0), "Invalid address");
+        storageContract = EscrowStorage(_storageContract);
+    }
+
     function setArtistMetadata(string memory name, string memory bio, string memory portfolioUrl)
         public
         whenNotPaused
@@ -91,22 +97,22 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return newItemId;
     }
 
-   function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
-    public
-    onlyRole(ARTIST_ROLE)
-    whenNotPaused
-    returns (uint256[] memory)
-{
-    require(metadataURIs.length > 0, "No metadata URIs provided");
-    require(metadataURIs.length == royaltyBps.length, "Mismatched array lengths");
-    require(metadataURIs.length <= 50, "Batch size exceeds limit");
+    function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
+        public
+        onlyRole(ARTIST_ROLE)
+        whenNotPaused
+        returns (uint256[] memory)
+    {
+        require(metadataURIs.length > 0, "No metadata URIs provided");
+        require(metadataURIs.length == royaltyBps.length, "Mismatched array lengths");
+        require(metadataURIs.length <= 50, "Batch size exceeds limit");
 
-    uint256[] memory tokenIds = new uint256[](metadataURIs.length);
-    for (uint256 i = 0; i < metadataURIs.length; i++) {
-        tokenIds[i] = _mintSingle(msg.sender, metadataURIs[i], royaltyBps[i]);
+        uint256[] memory tokenIds = new uint256[](metadataURIs.length);
+        for (uint256 i = 0; i < metadataURIs.length; i++) {
+            tokenIds[i] = _mintSingle(msg.sender, metadataURIs[i], royaltyBps[i]);
+        }
+        return tokenIds;
     }
-    return tokenIds;
-}
 
     function burn(uint256 tokenId)
         public
