@@ -148,4 +148,25 @@ contract EscrowStorage is AccessControl {
     function setVoucherRedeemed(address nftContract, uint256 tokenId, bool redeemed) external onlyRole(ADMIN_ROLE) {
         voucherRedeemed[nftContract][tokenId] = redeemed;
     }
+   
+function getAuctions() external view returns (Auction[] memory) {
+    uint256 totalTokens = doArt.totalSupply();
+    Auction[] memory allAuctions = new Auction[](totalTokens);
+    uint256 count = 0;
+
+    for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
+        Auction memory auction = auctions[address(doArt)][tokenId];
+        if (auction.isActive) {
+            allAuctions[count] = auction;
+            count++;
+        }
+    }
+
+    Auction[] memory result = new Auction[](count);
+    for (uint256 i = 0; i < count; i++) {
+        result[i] = allAuctions[i];
+    }
+
+    return result;
+}
 }
