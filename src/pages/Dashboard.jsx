@@ -41,7 +41,7 @@ function Dashboard({ provider }) {
   const {
     isLoading,
     data: stats,
-    error,
+    error
   } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: async () => {
@@ -60,15 +60,14 @@ function Dashboard({ provider }) {
         provider
       );
 
-      const [totalNfts, listings, auctions, filter] = await Promise.all([
+      const [totalNfts, listings, filter] = await Promise.all([
         escrowStorage.getTotalNfts().catch(() => ethers.BigNumber.from(0)),
         escrowStorage.getListings().catch(() => []),
-        escrowStorage.getAuctions().catch(() => []),
-        doArt.filters.Transfer(),
+        doArt.filters.Transfer()
       ]);
 
       const activeListings = listings.filter((l) => l.isListed).length;
-      const activeAuctions = auctions.filter((a) => a.isActive).length;
+      const activeAuctions = 0; // Temporarily set to 0 since getAuctions() isn't available
 
       // Fetch total volume from Transfer events
       const events = await doArt
@@ -82,9 +81,9 @@ function Dashboard({ provider }) {
         totalNfts: totalNfts.toNumber(),
         activeListings,
         activeAuctions,
-        totalVolume,
+        totalVolume
       };
-    },
+    }
   });
 
   if (isLoading) return <Spinner />;
