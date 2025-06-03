@@ -60,14 +60,15 @@ function Dashboard({ provider }) {
         provider
       );
 
-      const [totalNfts, listings, filter] = await Promise.all([
+      const [totalNfts, listings, auctions, filter] = await Promise.all([
         escrowStorage.getTotalNfts().catch(() => ethers.BigNumber.from(0)),
         escrowStorage.getListings().catch(() => []),
+        escrowStorage.getAuctions().catch(() => []),
         doArt.filters.Transfer()
       ]);
 
       const activeListings = listings.filter((l) => l.isListed).length;
-      const activeAuctions = 0; // Temporarily set to 0 since getAuctions() isn't available
+      const activeAuctions = auctions.filter((a) => a.isActive).length;
 
       // Fetch total volume from Transfer events
       const events = await doArt
