@@ -1,7 +1,5 @@
-// src/ui/AppLayout.jsx
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
-import SideBar from './SideBar';
 import styled from 'styled-components';
 
 const Main = styled.main`
@@ -12,7 +10,6 @@ const Main = styled.main`
 
 const StyledAppLayout = styled.div`
   display: grid;
-  grid-template-columns: 26rem 1fr;
   grid-template-rows: auto 1fr;
   height: 100vh;
 `;
@@ -31,7 +28,7 @@ function AppLayout({
   signer,
   setSigner,
   account,
-  setAccount,
+  setAccount
 }) {
   return (
     <StyledAppLayout>
@@ -41,7 +38,6 @@ function AppLayout({
         account={account}
         setAccount={setAccount}
       />
-      <SideBar />
       <Main>
         <Container>
           <Outlet context={{ provider, signer }} />
