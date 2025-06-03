@@ -4,9 +4,11 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "./DoArt.sol"; // Import DoArt interface
 
 interface IDoArt {
     function mintFor(address to, string memory metadataURI, uint96 royaltyBps) external returns (uint256);
+    function totalSupply() external view returns (uint256); // Add totalSupply interface
 }
 
 contract EscrowStorage is AccessControl {
@@ -58,17 +60,22 @@ contract EscrowStorage is AccessControl {
     mapping(address => mapping(uint256 => Bid[])) public bids;
     mapping(address => mapping(uint256 => Auction)) public auctions;
     mapping(address => mapping(uint256 => bool)) public voucherRedeemed;
-    // mapping(address => uint256[]) private _tempTokenIds;
-    // Removed tempTokenIds storage and functions as they're no longer needed
+
+    IDoArt public doArt; // Add DoArt contract reference
 
     // Events
     event ListingChanged(address indexed nftContract, uint256 indexed tokenId);
     event BidChanged(address indexed nftContract, uint256 indexed tokenId);
     event AuctionChanged(address indexed nftContract, uint256 indexed tokenId);
 
-    constructor() {
+    constructor(address _doArtContract) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
+        doArt = IDoArt(_doArtContract); // Initialize DoArt reference
+    }
+
+    function getTotalNfts() external view returns (uint256) {
+        return doArt.totalSupply(); // Fetch total NFTs from DoArt
     }
 
     function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
@@ -120,14 +127,4 @@ contract EscrowStorage is AccessControl {
     function setVoucherRedeemed(address nftContract, uint256 tokenId, bool redeemed) external onlyRole(ADMIN_ROLE) {
         voucherRedeemed[nftContract][tokenId] = redeemed;
     }
-
-    // function storeTempTokenId(address user, uint256 tokenId) external onlyRole(ADMIN_ROLE) {
-    //     _tempTokenIds[user].push(tokenId);
-    // }
-
-    // function getTempTokenIds(address user) external onlyRole(ADMIN_ROLE) returns (uint256[] memory) {
-    //     uint256[] memory tokenIds = _tempTokenIds[user];
-    //     delete _tempTokenIds[user];
-    //     return tokenIds;
-    // }
 }
