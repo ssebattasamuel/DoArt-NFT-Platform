@@ -12,11 +12,20 @@ const Container = styled.div`
   margin: 0 auto;
 `;
 
+const Message = styled.p`
+  text-align: center;
+  font-size: 1.6rem;
+  color: var(--color-grey-600);
+  margin-top: 2rem;
+`;
+
 const ArtNftContainer = ({ provider, signer }) => {
   const { isLoading, artNfts, error } = useNfts();
 
   if (isLoading) return <Spinner />;
-  if (error) return <div>Error: {error.message}</div>;
+  if (error) return <Message>Error: {error.message}</Message>;
+  if (!artNfts || artNfts.length === 0)
+    return <Message>No NFTs available. Mint one to get started!</Message>;
 
   return (
     <Container>
