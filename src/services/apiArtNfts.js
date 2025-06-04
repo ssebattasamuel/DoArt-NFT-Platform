@@ -104,45 +104,55 @@ export async function createEditNft(nftData, signer) {
     signer
   );
 
-  const { title, purchasePrice, description, image } = nftData;
-  // Upload image to Pinata
-  const imageUri = await uploadToPinata(image);
-  const metadata = { name: title, description, image: imageUri };
-  // Upload metadata to Pinata
-  const metadataUri = await uploadToPinata(metadata, true);
+  try {
+    const { title, purchasePrice, description, image } = nftData;
+    // Upload image to Pinata
+    const imageUri = await uploadToPinata(image);
+    const metadata = { name: title, description, image: imageUri };
+    // Upload metadata to Pinata
+    const metadataUri = await uploadToPinata(metadata, true);
 
-  // Mint the NFT
-  const royaltyBps = 500; // 5% royalty
-  const mintTx = await doArt.mint(metadataUri, royaltyBps);
-  await mintTx.wait();
+    // Mint the NFT
+    const royaltyBps = 500; // 5% royalty
+    const mintTx = await doArt.mint(metadataUri, royaltyBps);
+    await mintTx.wait();
 
-  // Get the tokenId of the newly minted NFT
-  const totalSupply = await doArt.totalSupply();
-  const tokenId = totalSupply.toString();
+    // Get the tokenId of the newly minted NFT
+    const totalSupply = await doArt.totalSupply();
+    const tokenId = totalSupply.toString();
 
-  // Approve EscrowListings to manage the NFT
-  const approveTx = await doArt.approve(
-    config[chainId].escrowListings.address,
-    tokenId
-  );
-  await approveTx.wait();
+    // Approve EscrowListings to manage the NFT
+    const approveTx = await doArt.approve(
+      config[chainId].escrowListings.address,
+      tokenId
+    );
+    await approveTx.wait();
 
-  // List the NFT for sale
-  const price = ethers.utils.parseEther(purchasePrice.toString());
-  const escrowAmount = ethers.utils.parseEther('0.01'); // Example escrow amount
-  const listTx = await escrowListings.list(
-    config[chainId].doArt.address,
-    tokenId,
-    ethers.constants.AddressZero, // Open to any buyer
-    price,
-    0, // No minimum bid (not an auction)
-    escrowAmount,
-    false, // Not an auction
-    0 // No auction duration
-  );
-  await listTx.wait();
+    // List the NFT for sale
+    const price = ethers.utils.parseEther(purchasePrice.toString());
+    const escrowAmount = ethers.utils.parseEther('0.01'); // Example escrow amount
+    const listTx = await escrowListings.list(
+      config[chainId].doArt.address,
+      tokenId,
+      ethers.constants.AddressZero, // Open to any buyer
+      price,
+      0, // No minimum bid (not an auction)
+      escrowAmount,
+      false, // Not an auction
+      0 // No auction duration
+    );
+    await listTx.wait();
 
-  return { id: tokenId, ...nftData };
+    return { id: tokenId, ...nftData };
+  } catch (error) {
+    if (error.message.includes('user rejected transaction')) {
+      throw new Error('Transaction rejected by user');
+    } else if (error.message.includes('insufficient funds')) {
+      throw new Error('Insufficient funds for transaction');
+    } else {
+      throw new Error(`Failed to create NFT: ${error.message}`);
+    }
+  }
 }
 
 export async function cancelListing({ contractAddress, tokenId }) {
