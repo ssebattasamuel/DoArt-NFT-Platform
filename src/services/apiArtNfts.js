@@ -29,8 +29,8 @@ async function uploadToPinata(file, isJson = false) {
       headers: {
         'Content-Type': 'multipart/form-data',
         pinata_api_key: PINATA_API_KEY,
-        pinata_secret_api_key: PINATA_SECRET_KEY,
-      },
+        pinata_secret_api_key: PINATA_SECRET_KEY
+      }
     });
     return `ipfs://${response.data.IpfsHash}`;
   } catch (error) {
@@ -38,16 +38,16 @@ async function uploadToPinata(file, isJson = false) {
   }
 }
 
-export async function getArtNfts() {
+export async function getArtNfts(signer) {
   const escrowStorage = new ethers.Contract(
     config[chainId].escrowStorage.address,
     EscrowStorageABI.abi,
-    provider
+    signer || provider
   );
   const doArt = new ethers.Contract(
     config[chainId].doArt.address,
     DoArtABI.abi,
-    provider
+    signer || provider
   );
 
   const listings = await escrowStorage.getListings();
@@ -56,7 +56,7 @@ export async function getArtNfts() {
   return Promise.all(
     listings.map(async (listing) => {
       const tokenId = listing.tokenId.toString();
-      const contractAddress = listing.contractAddress;
+      const contractAddress = listing.nftContract;
       const isListed = listing.isListed;
       const price = listing.price;
       const escrowAmount = listing.escrowAmount;
@@ -84,18 +84,23 @@ export async function getArtNfts() {
         auction: auction
           ? { isActive: auction.isActive, highestBid: auction.highestBid }
           : { isActive: false, highestBid: ethers.BigNumber.from(0) },
-        metadata,
+        metadata
       };
     })
   );
 }
 
-export async function createEditNft(nftData, id) {
+export async function createEditNft(nftData) {
   const provider = new ethers.providers.Web3Provider(window.ethereum);
   const signer = provider.getSigner();
   const doArt = new ethers.Contract(
     config[chainId].doArt.address,
     DoArtABI.abi,
+    signer
+  );
+  const escrowListings = new ethers.Contract(
+    config[chainId].escrowListings.address,
+    EscrowListingsABI.abi,
     signer
   );
 
@@ -106,20 +111,38 @@ export async function createEditNft(nftData, id) {
   // Upload metadata to Pinata
   const metadataUri = await uploadToPinata(metadata, true);
 
-  let tx;
-  if (!id) {
-    // Create new NFT
-    tx = await doArt.mint(
-      signer.getAddress(),
-      metadataUri,
-      ethers.utils.parseEther(purchasePrice)
-    );
-  } else {
-    // Edit existing NFT (if supported by contract; placeholder)
-    throw new Error('Editing NFTs not supported in current contract');
-  }
-  await tx.wait();
-  return { id: tx.hash, ...nftData };
+  // Mint the NFT
+  const royaltyBps = 500; // 5% royalty
+  const mintTx = await doArt.mint(metadataUri, royaltyBps);
+  await mintTx.wait();
+
+  // Get the tokenId of the newly minted NFT
+  const totalSupply = await doArt.totalSupply();
+  const tokenId = totalSupply.toString();
+
+  // Approve EscrowListings to manage the NFT
+  const approveTx = await doArt.approve(
+    config[chainId].escrowListings.address,
+    tokenId
+  );
+  await approveTx.wait();
+
+  // List the NFT for sale
+  const price = ethers.utils.parseEther(purchasePrice.toString());
+  const escrowAmount = ethers.utils.parseEther('0.01'); // Example escrow amount
+  const listTx = await escrowListings.list(
+    config[chainId].doArt.address,
+    tokenId,
+    ethers.constants.AddressZero, // Open to any buyer
+    price,
+    0, // No minimum bid (not an auction)
+    escrowAmount,
+    false, // Not an auction
+    0 // No auction duration
+  );
+  await listTx.wait();
+
+  return { id: tokenId, ...nftData };
 }
 
 export async function cancelListing({ contractAddress, tokenId }) {
@@ -131,7 +154,7 @@ export async function cancelListing({ contractAddress, tokenId }) {
     signer
   );
 
-  const tx = await escrowListings.cancelListing(contractAddress, tokenId);
+  const tx = await escrowListings.cancelSale(contractAddress, tokenId);
   await tx.wait();
   return { contractAddress, tokenId };
 }
