@@ -87,25 +87,7 @@ function Gallery({ provider, signer }) {
       </Row>
       <Row>
         <AddNft provider={provider} signer={signer} />
-        {nfts && nfts.length > 0 ? (
-          <NftGrid>
-            {nfts.map((nft) => (
-              <NftCard key={nft.tokenId}>
-                <img
-                  src={nft.image}
-                  alt={nft.name}
-                  style={{ width: '100%', height: '200px', objectFit: 'cover' }}
-                />
-                <h3>{nft.name}</h3>
-                <p>Artist: {nft.artist}</p>
-                <p>Price: {nft.price} ETH</p>
-                <button>{nft.isAuction ? 'Place Bid' : 'Buy Now'}</button>
-              </NftCard>
-            ))}
-          </NftGrid>
-        ) : (
-          <ArtNftContainer provider={provider} signer={signer} />
-        )}
+        <ArtNftContainer provider={provider} signer={signer} />
       </Row>
     </>
   );
