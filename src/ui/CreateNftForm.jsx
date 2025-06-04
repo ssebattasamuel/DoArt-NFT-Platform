@@ -9,15 +9,15 @@ import { useCreateNft } from '../hooks/useCreateNft';
 import { useEditNft } from '../hooks/useEditNft';
 
 function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
-  const { isCreating, createEditNft: createNft } = useCreateNft();
-  const { isEditing, createEditNft: editNft } = useEditNft();
+  const { isCreating, createNft } = useCreateNft();
+  const { isEditing, editNft } = useEditNft();
   const isWorking = isCreating || isEditing;
 
   const { id: editId, ...editValues } = nftToEdit;
   const isEditSession = Boolean(editId);
 
   const { register, handleSubmit, reset, formState } = useForm({
-    defaultValues: isEditSession ? editValues : {},
+    defaultValues: isEditSession ? editValues : {}
   });
   const { errors } = formState;
 
@@ -31,7 +31,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
           onSuccess: () => {
             reset();
             onCloseModal?.();
-          },
+          }
         }
       );
     } else {
@@ -41,7 +41,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
           onSuccess: () => {
             reset();
             onCloseModal?.();
-          },
+          }
         }
       );
     }
@@ -71,7 +71,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
           disabled={isWorking}
           {...register('purchasePrice', {
             required: 'This field is required',
-            validate: (value) => value > 0 || 'Price cannot be zero',
+            validate: (value) => value > 0 || 'Price cannot be zero'
           })}
         />
       </FormRow>
@@ -90,7 +90,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
           accept="image/*"
           disabled={isWorking}
           {...register('image', {
-            required: isEditSession ? false : 'This field is required',
+            required: isEditSession ? false : 'This field is required'
           })}
         />
       </FormRow>
