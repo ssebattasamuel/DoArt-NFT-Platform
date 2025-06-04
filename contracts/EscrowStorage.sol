@@ -45,6 +45,7 @@ contract EscrowStorage is AccessControl {
         bool isApproved;
         address saleApprover;
         bool isAuction;
+        uint256 tokenId; // Added tokenId field
     }
 
     struct LazyMintVoucher {
@@ -85,6 +86,7 @@ contract EscrowStorage is AccessControl {
         for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
             Listing memory listing = listings[address(doArt)][tokenId];
             if (listing.isListed) {
+                listing.tokenId = tokenId; // Set the tokenId in the struct
                 allListings[count] = listing;
                 count++;
             }
@@ -100,7 +102,9 @@ contract EscrowStorage is AccessControl {
     }
 
     function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
-        return listings[nftContract][tokenId];
+        Listing memory listing = listings[nftContract][tokenId];
+        listing.tokenId = tokenId; // Set the tokenId in the returned struct
+        return listing;
     }
 
     function setListing(address nftContract, uint256 tokenId, Listing memory listing) external onlyRole(ADMIN_ROLE) {
@@ -149,24 +153,24 @@ contract EscrowStorage is AccessControl {
         voucherRedeemed[nftContract][tokenId] = redeemed;
     }
    
-function getAuctions() external view returns (Auction[] memory) {
-    uint256 totalTokens = doArt.totalSupply();
-    Auction[] memory allAuctions = new Auction[](totalTokens);
-    uint256 count = 0;
+    function getAuctions() external view returns (Auction[] memory) {
+        uint256 totalTokens = doArt.totalSupply();
+        Auction[] memory allAuctions = new Auction[](totalTokens);
+        uint256 count = 0;
 
-    for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
-        Auction memory auction = auctions[address(doArt)][tokenId];
-        if (auction.isActive) {
-            allAuctions[count] = auction;
-            count++;
+        for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
+            Auction memory auction = auctions[address(doArt)][tokenId];
+            if (auction.isActive) {
+                allAuctions[count] = auction;
+                count++;
+            }
         }
-    }
 
-    Auction[] memory result = new Auction[](count);
-    for (uint256 i = 0; i < count; i++) {
-        result[i] = allAuctions[i];
-    }
+        Auction[] memory result = new Auction[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = allAuctions[i];
+        }
 
-    return result;
-}
+        return result;
+    }
 }
