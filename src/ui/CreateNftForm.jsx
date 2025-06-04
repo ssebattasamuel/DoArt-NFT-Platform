@@ -8,7 +8,7 @@ import Textarea from './Textarea';
 import { useCreateNft } from '../hooks/useCreateNft';
 import { useEditNft } from '../hooks/useEditNft';
 
-function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
+function CreateNftForm({ nftToEdit = {}, onCloseModal, signer }) {
   const { isCreating, createNft } = useCreateNft();
   const { isEditing, editNft } = useEditNft();
   const isWorking = isCreating || isEditing;
@@ -26,7 +26,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
 
     if (isEditSession) {
       editNft(
-        { newNftData: { ...data, image }, id: editId },
+        { newNftData: { ...data, image }, id: editId, signer },
         {
           onSuccess: () => {
             reset();
@@ -36,7 +36,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
       );
     } else {
       createNft(
-        { ...data, image },
+        { ...data, image, signer },
         {
           onSuccess: () => {
             reset();

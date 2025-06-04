@@ -5,12 +5,13 @@ import toast from 'react-hot-toast';
 export function useEditNft() {
   const queryClient = useQueryClient();
   const { mutate: editNft, isLoading: isEditing } = useMutation({
-    mutationFn: ({ newNftData, id }) => createEditNft(newNftData, id),
+    mutationFn: ({ newNftData, id, signer }) =>
+      createEditNft({ ...newNftData, id }, signer),
     onSuccess: () => {
-      toast.success('Nft successfully Edited');
+      toast.success('NFT successfully edited');
       queryClient.invalidateQueries({ queryKey: ['artnfts'] });
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => toast.error(err.message)
   });
   return { isEditing, editNft };
 }
