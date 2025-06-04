@@ -1,4 +1,3 @@
-// src/hooks/useNfts.js
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import EscrowStorageABI from '../abis/EscrowStorage.json';
@@ -23,20 +22,28 @@ export function useNfts() {
       provider
     );
 
+    const totalSupply = await doArt.totalSupply();
+    console.log('Total NFTs minted:', totalSupply.toString());
+
     const listings = await escrowStorage.getListings();
+    console.log('Listings fetched:', listings);
+
     const auctions = await escrowStorage.getAuctions();
+    console.log('Auctions fetched:', auctions);
 
     const nfts = await Promise.all(
       listings.map(async (listing) => {
         const tokenId = listing.tokenId.toString();
-        const contractAddress = listing.contractAddress;
+        const contractAddress = listing.nftContract;
         const isListed = listing.isListed;
         const price = listing.price;
         const escrowAmount = listing.escrowAmount;
         let uri, metadata;
         try {
           uri = await doArt.tokenURI(tokenId);
+          console.log(`Token ${tokenId} URI:`, uri);
           metadata = await (await fetch(uri)).json();
+          console.log(`Token ${tokenId} Metadata:`, metadata);
         } catch (error) {
           console.error(
             `Failed to fetch metadata for token ${tokenId}: ${error.message}`
@@ -57,21 +64,22 @@ export function useNfts() {
           auction: auction
             ? { isActive: auction.isActive, highestBid: auction.highestBid }
             : { isActive: false, highestBid: ethers.BigNumber.from(0) },
-          metadata,
+          metadata
         };
       })
     );
 
+    console.log('Final NFTs to display:', nfts);
     return nfts;
   };
 
   const {
     isLoading,
     data: artNfts,
-    error,
+    error
   } = useQuery({
     queryKey: ['artnfts'],
-    queryFn: fetchNfts,
+    queryFn: fetchNfts
   });
 
   return { isLoading, error, artNfts };
