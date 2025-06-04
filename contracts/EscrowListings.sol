@@ -81,6 +81,7 @@ contract EscrowListings {
             newListing.buyer = msg.sender;
         }
         newListing.buyerDeposit += msg.value;
+        newListing.tokenId = tokenId;
 
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 5, msg.sender, msg.value);
@@ -95,6 +96,8 @@ contract EscrowListings {
 
         EscrowStorage.Listing memory newListing = listing;
         newListing.isApproved = approved;
+        newListing.tokenId = tokenId;
+
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 6, msg.sender, approved ? 1 : 0);
     }
@@ -113,6 +116,8 @@ contract EscrowListings {
 
         EscrowStorage.Listing memory newListing = listing;
         newListing.saleApprover = msg.sender;
+        newListing.tokenId = tokenId;
+
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 6, msg.sender, 1);
     }
@@ -127,6 +132,8 @@ contract EscrowListings {
         require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
         require(listing.buyer == address(0) || msg.sender == listing.buyer, "Only designated buyer");
         require(listing.saleApprover != address(0), "Sale not approved");
+
+        listing.tokenId = tokenId;
 
         address buyer = listing.buyer != address(0) ? listing.buyer : msg.sender;
 
@@ -161,6 +168,8 @@ contract EscrowListings {
         );
         require(!listing.isApproved, "Cannot cancel approved artwork");
 
+         listing.tokenId = tokenId;
+
         EscrowStorage.Bid[] memory bidList = storageContract.getBids(nftContract, tokenId);
         for (uint256 i = 0; i < bidList.length; i++) {
             payable(bidList[i].bidder).transfer(bidList[i].amount);
@@ -186,6 +195,8 @@ contract EscrowListings {
 
         EscrowStorage.Listing memory newListing = listing;
         newListing.viewingPeriodEnd += additionalTime;
+        newListing.tokenId = tokenId;
+    
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 8, msg.sender, newListing.viewingPeriodEnd);
     }
@@ -252,7 +263,8 @@ function transferForAuction(address nftContract, uint256 tokenId, address to) ex
             isListed: true,
             isApproved: false,
             saleApprover: address(0),
-            isAuction: isAuction
+            isAuction: isAuction,
+            tokenId: tokenId
         }));
     }
 
