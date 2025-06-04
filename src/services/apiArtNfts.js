@@ -90,9 +90,9 @@ export async function getArtNfts(signer) {
   );
 }
 
-export async function createEditNft(nftData) {
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const signer = provider.getSigner();
+export async function createEditNft(nftData, signer) {
+  if (!signer) throw new Error('Signer not available');
+
   const doArt = new ethers.Contract(
     config[chainId].doArt.address,
     DoArtABI.abi,
