@@ -5,12 +5,16 @@ import "./EscrowStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol"
+import "@openzeppelin/contracts/access/AccessControl.sol"
 
 
 
-contract EscrowLazyMinting {
+contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl{
     EscrowStorage public storageContract;
-    bool private locked;
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+   
 
     event Action(
         address indexed nftContract,
@@ -22,16 +26,18 @@ contract EscrowLazyMinting {
 
     constructor(address _storageContract) {
         storageContract = EscrowStorage(_storageContract);
+        _grantRole(PAUSER_ROLE, msg.sender);
     }
-
-    modifier nonReentrant() {
-        require(!locked, "Reentrant call");
-        locked = true;
-        _;
-        locked = false;
+    function pause()external onlyRole(PAUSER_ROLE){
+        _pause{};
     }
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+        }
 
-    function redeemLazyMint(address nftContract, EscrowStorage.LazyMintVoucher calldata voucher) external payable nonReentrant {
+   
+
+    function redeemLazyMint(address nftContract, EscrowStorage.LazyMintVoucher calldata voucher) external payable nonReentrant whenNotPaused {
         require(msg.value >= voucher.price, "Insufficient payment");
         _verifyVoucher(voucher);
         _checkTokenNotMinted(nftContract, voucher.tokenId);
@@ -46,8 +52,8 @@ contract EscrowLazyMinting {
         address signer = ECDSA.recover(hash, signature);
         return signer == voucher.creator;
     }
-function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) external {
-    require(msg.sender == address(this), "Only callable by contract");
+function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) internal {
+    
     try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
         require(tokenId == voucher.tokenId, "Minted token ID does not match voucher");
     } catch Error(string memory reason) {

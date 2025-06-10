@@ -32,10 +32,10 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
 
     constructor(address _storageContract) ERC721("DoArt", "DA") {
         storageContract = EscrowStorage(_storageContract);
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(ARTIST_ROLE, msg.sender);
-        _setupRole(PAUSER_ROLE, msg.sender);
-        _setupRole(MINTER_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ARTIST_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
     }
 
     // Add function to update storageContract

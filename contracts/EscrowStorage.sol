@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/security/Pausable.sol"
 import "./DoArt.sol";
 
 interface IDoArt {
@@ -11,12 +12,13 @@ interface IDoArt {
     function totalSupply() external view returns (uint256);
 }
 
-contract EscrowStorage is AccessControl {
+contract EscrowStorage is AccessControl, Pausable {
     uint256 public constant DEFAULT_VIEWING_PERIOD = 3 days;
     uint256 public constant ANTI_SNIPING_EXTENSION = 10 minutes;
     uint256 public constant ANTI_SNIPING_WINDOW = 5 minutes;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE")
 
     struct Bid {
         address bidder;
@@ -45,7 +47,7 @@ contract EscrowStorage is AccessControl {
         bool isApproved;
         address saleApprover;
         bool isAuction;
-        uint256 tokenId; // Added tokenId field
+        uint256 tokenId; 
     }
 
     struct LazyMintVoucher {
@@ -72,6 +74,16 @@ contract EscrowStorage is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
         doArt = IDoArt(_doArtContract);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        doArt = IDoArt(_doArtContract);
+    }
+    
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 
     function getTotalNfts() external view returns (uint256) {
@@ -86,7 +98,7 @@ contract EscrowStorage is AccessControl {
         for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
             Listing memory listing = listings[address(doArt)][tokenId];
             if (listing.isListed) {
-                listing.tokenId = tokenId; // Set the tokenId in the struct
+                listing.tokenId = tokenId; 
                 allListings[count] = listing;
                 count++;
             }

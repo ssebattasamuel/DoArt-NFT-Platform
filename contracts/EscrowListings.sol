@@ -2,14 +2,18 @@
 pragma solidity ^0.8.9;
 
 import "./EscrowStorage.sol";
-import "hardhat/console.sol";
+
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract EscrowListings {
+contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
     EscrowStorage public storageContract;
-    bool private locked;
+   
     address public escrowAuctions;
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     event Action(
         address indexed nftContract,
@@ -22,14 +26,17 @@ contract EscrowListings {
     constructor(address _storageContract, address _escrowAuctions) {
         storageContract = EscrowStorage(_storageContract);
         escrowAuctions = _escrowAuctions;
+        _grantRole(PAUSER_ROLE, msg.sender);
+    }
+     function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
     }
 
-    modifier nonReentrant() {
-        require(!locked, "Reentrant call");
-        locked = true;
-        _;
-        locked = false;
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
+
+   
 
     modifier onlySeller(address nftContract, uint256 tokenId) {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
@@ -55,7 +62,7 @@ contract EscrowListings {
         uint256 escrowAmount,
         bool isAuction,
         uint256 auctionDuration
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         _validateListing(nftContract, tokenId, buyer, price, minBid, escrowAmount);
         IERC721(nftContract).transferFrom(msg.sender, address(this), tokenId);
         _createListing(nftContract, tokenId, buyer, price, minBid, escrowAmount, isAuction);
@@ -65,8 +72,57 @@ contract EscrowListings {
         }
         emit Action(nftContract, tokenId, 1, msg.sender, price);
     }
+    function batchList(
+    address[] calldata nftContracts,
+    uint256[] calldata tokenIds,
+    address[] calldata buyers,
+    uint256[] calldata prices,
+    uint256[] calldata minBids,
+    uint256[] calldata escrowAmounts,
+    bool[] calldata isAuctions,
+    uint256[] calldata auctionDurations
+) external nonReentrant whenNotPaused {
+    require(nftContracts.length > 0, "No tokens provided");
+    require(
+        nftContracts.length == tokenIds.length &&
+        nftContracts.length == buyers.length &&
+        nftContracts.length == prices.length &&
+        nftContracts.length == minBids.length &&
+        nftContracts.length == escrowAmounts.length &&
+        nftContracts.length == isAuctions.length &&
+        nftContracts.length == auctionDurations.length,
+        "Mismatched array lengths"
+    );
+    require(nftContracts.length <= 50, "Batch size exceeds limit");
 
-    function depositEarnest(address nftContract, uint256 tokenId) external payable nonReentrant onlyBuyer(nftContract, tokenId) {
+    for (uint256 i = 0; i < nftContracts.length; i++) {
+        _validateListing(
+            nftContracts[i],
+            tokenIds[i],
+            buyers[i],
+            prices[i],
+            minBids[i],
+            escrowAmounts[i]
+        );
+        IERC721(nftContracts[i]).transferFrom(msg.sender, address(this), tokenIds[i]);
+        _createListing(
+            nftContracts[i],
+            tokenIds[i],
+            buyers[i],
+            prices[i],
+            minBids[i],
+            escrowAmounts[i],
+            isAuctions[i]
+        );
+        if (isAuctions[i]) {
+            IERC721(nftContracts[i]).approve(escrowAuctions, tokenIds[i]);
+            _createAuction(nftContracts[i], tokenIds[i], minBids[i], auctionDurations[i]);
+        }
+        emit Listed(nftContracts[i], tokenIds[i], msg.sender, buyers[i], prices[i]);
+    }
+}
+
+    function depositEarnest(address nftContract, uint256 tokenId) external payable nonReentrant whenNotPaused onlyBuyer(nftContract, tokenId) {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
         require(listing.isListed, "Token not listed");
         require(!listing.isAuction, "Cannot deposit for auctions");
@@ -87,7 +143,7 @@ contract EscrowListings {
         emit Action(nftContract, tokenId, 5, msg.sender, msg.value);
     }
 
-    function approveArtwork(address nftContract, uint256 tokenId, bool approved) external onlyBuyer(nftContract, tokenId) {
+    function approveArtwork(address nftContract, uint256 tokenId, bool approved) external whenNotPaused onlyBuyer(nftContract, tokenId) {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
         require(listing.isListed, "Token not listed");
         require(!listing.isAuction, "Cannot approve auctions");
@@ -102,7 +158,7 @@ contract EscrowListings {
         emit Action(nftContract, tokenId, 6, msg.sender, approved ? 1 : 0);
     }
 
-    function approveSale(address nftContract, uint256 tokenId) external {
+    function approveSale(address nftContract, uint256 tokenId) external whenNotPaused {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
         require(listing.isListed, "Token not listed");
         require(!listing.isAuction, "Cannot approve auctions");
@@ -122,7 +178,7 @@ contract EscrowListings {
         emit Action(nftContract, tokenId, 6, msg.sender, 1);
     }
 
-    function finalizeSale(address nftContract, uint256 tokenId) external payable nonReentrant {
+    function finalizeSale(address nftContract, uint256 tokenId) external payable nonReentrant whenNotPaused {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
         require(listing.isListed, "Token not listed");
         require(!listing.isAuction, "Cannot finalize auctions");
@@ -158,9 +214,10 @@ contract EscrowListings {
         emit Action(nftContract, tokenId, 2, buyer, listing.price);
     }
 
-    function cancelSale(address nftContract, uint256 tokenId) external nonReentrant {
+    function cancelSale(address nftContract, uint256 tokenId) external nonReentrant whenNotPaused {
         EscrowStorage.Listing memory listing = storageContract.getListing(nftContract, tokenId);
         require(listing.isListed, "Token not listed");
+        require(!listing.isAuction, "Cannot cancel auctions")
         require(
             msg.sender == listing.seller ||
                 (!listing.isAuction && listing.buyer != address(0) && msg.sender == listing.buyer),
@@ -200,7 +257,7 @@ contract EscrowListings {
         storageContract.setListing(nftContract, tokenId, newListing);
         emit Action(nftContract, tokenId, 8, msg.sender, newListing.viewingPeriodEnd);
     }
-function transferForAuction(address nftContract, uint256 tokenId, address to) external {
+function transferForAuction(address nftContract, uint256 tokenId, address to) external whenNotPaused {
     console.log("transferForAuction: msg.sender =", msg.sender);
     console.log("transferForAuction: escrowAuctions =", escrowAuctions);
     require(msg.sender == escrowAuctions, "Only EscrowAuctions");
@@ -279,4 +336,8 @@ function transferForAuction(address nftContract, uint256 tokenId, address to) ex
             isActive: true
         }));
     }
+
+    function getBalance() public view returns (uint256) {
+    return address(this).balance;
+}
 }
