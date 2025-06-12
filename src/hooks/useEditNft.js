@@ -1,17 +1,28 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createEditNft } from '../services/apiArtNfts';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import { editListing } from '../services/apiArtNfts';
+import { useWeb3 } from './useWeb3';
 
 export function useEditNft() {
   const queryClient = useQueryClient();
+  const { contracts } = useWeb3();
+
   const { mutate: editNft, isLoading: isEditing } = useMutation({
-    mutationFn: ({ newNftData, id, signer }) =>
-      createEditNft({ ...newNftData, id }, signer),
+    mutationFn: ({ newNftData: { purchasePrice }, id, contractAddress }) =>
+      editListing(
+        {
+          contractAddress: contractAddress || contracts.doArt.address,
+          tokenId: id,
+          purchasePrice
+        },
+        { escrowListings: contracts.escrowListings }
+      ),
     onSuccess: () => {
-      toast.success('NFT successfully edited');
-      queryClient.invalidateQueries({ queryKey: ['artnfts'] });
+      toast.success('NFT listing updated successfully');
+      queryClient.invalidateQueries(['artNfts']);
     },
-    onError: (err) => toast.error(err.message)
+    onError: (err) => toast.error(`Failed to update NFT: ${err.message}`)
   });
+
   return { isEditing, editNft };
 }

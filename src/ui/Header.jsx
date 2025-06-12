@@ -1,10 +1,8 @@
 import styled from 'styled-components';
-import { ethers } from 'ethers';
-import { useState } from 'react';
-import { toast } from 'react-hot-toast';
 import { NavLink } from 'react-router-dom';
 import Button from './Button';
 import Logo from './Logo';
+import { useWeb3 } from '../hooks/useWeb3';
 import {
   HiOutlineHome,
   HiMiniBanknotes,
@@ -42,28 +40,8 @@ const WalletInfo = styled.div`
   gap: 1rem;
 `;
 
-function Header({ setProvider, setSigner, setAccount, account }) {
-  const connectWallet = async () => {
-    try {
-      if (!window.ethereum) {
-        toast.error('Please install MetaMask!');
-        return;
-      }
-
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send('eth_requestAccounts', []);
-      const signer = provider.getSigner();
-      const address = await signer.getAddress();
-
-      setProvider(provider);
-      setSigner(signer);
-      setAccount(address);
-      toast.success(`Connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
-    } catch (error) {
-      console.error('Wallet connection failed:', error);
-      toast.error('Failed to connect wallet.');
-    }
-  };
+function Header() {
+  const { account, connectWallet } = useWeb3();
 
   return (
     <StyledHeader>
@@ -103,6 +81,18 @@ function Header({ setProvider, setSigner, setAccount, account }) {
             })}
           >
             <HiMiniPaintBrush /> Art NFTs
+          </NavLink>
+        </NavItem>
+        <NavItem>
+          <NavLink
+            to="/account"
+            style={({ isActive }) => ({
+              color: isActive
+                ? 'var(--color-brand-600)'
+                : 'var(--color-grey-600)'
+            })}
+          >
+            <HiOutlineCog6Tooth /> Account
           </NavLink>
         </NavItem>
         <NavItem>

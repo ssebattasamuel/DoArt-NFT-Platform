@@ -6,7 +6,7 @@ import Input from './Input';
 import FileInput from './FileInput';
 import Textarea from './Textarea';
 import { useLazyMint } from '../hooks/useLazyMint';
-import { toast } from 'react-toastify'; // Add this import if using toast notifications
+import { toast } from 'react-hot-toast';
 
 function LazyMintForm({ onCloseModal }) {
   const { createLazyMint, isCreating } = useLazyMint();

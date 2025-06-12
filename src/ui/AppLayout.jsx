@@ -22,25 +22,13 @@ const Container = styled.div`
   gap: 3.2rem;
 `;
 
-function AppLayout({
-  provider,
-  setProvider,
-  signer,
-  setSigner,
-  account,
-  setAccount
-}) {
+function AppLayout({ account, connectWallet }) {
   return (
     <StyledAppLayout>
-      <Header
-        setProvider={setProvider}
-        setSigner={setSigner}
-        account={account}
-        setAccount={setAccount}
-      />
+      <Header />
       <Main>
         <Container>
-          <Outlet context={{ provider, signer }} />
+          <Outlet />
         </Container>
       </Main>
     </StyledAppLayout>

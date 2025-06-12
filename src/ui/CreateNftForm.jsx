@@ -7,13 +7,19 @@ import Input from './Input';
 import Textarea from './Textarea';
 import { useCreateNft } from '../hooks/useCreateNft';
 import { useEditNft } from '../hooks/useEditNft';
+import { useWeb3 } from '../hooks/useWeb3';
 
-function CreateNftForm({ nftToEdit = {}, onCloseModal, signer }) {
+function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
   const { isCreating, createNft } = useCreateNft();
   const { isEditing, editNft } = useEditNft();
+  const { contracts } = useWeb3();
   const isWorking = isCreating || isEditing;
 
-  const { id: editId, ...editValues } = nftToEdit;
+  const {
+    id: editId,
+    contractAddress: editContractAddress,
+    ...editValues
+  } = nftToEdit;
   const isEditSession = Boolean(editId);
 
   const { register, handleSubmit, reset, formState } = useForm({
@@ -26,7 +32,11 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal, signer }) {
 
     if (isEditSession) {
       editNft(
-        { newNftData: { ...data, image }, id: editId, signer },
+        {
+          newNftData: { ...data, image },
+          id: editId,
+          contractAddress: editContractAddress || contracts.doArt.address
+        },
         {
           onSuccess: () => {
             reset();
@@ -36,7 +46,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal, signer }) {
       );
     } else {
       createNft(
-        { ...data, image, signer },
+        { ...data, image },
         {
           onSuccess: () => {
             reset();
@@ -105,7 +115,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal, signer }) {
           Cancel
         </Button>
         <Button disabled={isWorking}>
-          {isEditSession ? 'Update NFT' : 'Mint NFT'}
+          {isEditSession ? 'Update Listing' : 'Mint NFT'}
         </Button>
       </FormRow>
     </Form>

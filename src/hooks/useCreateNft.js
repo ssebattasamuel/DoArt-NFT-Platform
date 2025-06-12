@@ -1,16 +1,23 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { createEditNft } from '../services/apiArtNfts';
+import { toast } from 'react-hot-toast';
+import { createNft } from '../services/apiArtNfts';
+import { useWeb3 } from './useWeb3';
 
 export function useCreateNft() {
   const queryClient = useQueryClient();
+  const { contracts } = useWeb3();
+
   const { mutate: createNft, isLoading: isCreating } = useMutation({
-    mutationFn: ({ signer, ...nftData }) => createEditNft(nftData, signer),
+    mutationFn: ({ title, purchasePrice, description, image, royaltyBps }) =>
+      createNft(
+        { title, purchasePrice, description, image, royaltyBps },
+        { doArt: contracts.doArt, escrowListings: contracts.escrowListings }
+      ),
     onSuccess: () => {
-      toast.success('New NFT successfully created');
-      queryClient.invalidateQueries({ queryKey: ['artnfts'] });
+      toast.success('NFT created successfully');
+      queryClient.invalidateQueries(['artNfts']);
     },
-    onError: (err) => toast.error(err.message)
+    onError: (err) => toast.error(`Failed to create NFT: ${err.message}`)
   });
 
   return { isCreating, createNft };

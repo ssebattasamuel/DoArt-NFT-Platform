@@ -160,6 +160,21 @@ export async function batchPlaceAuctionBids(bids, { escrowAuctions }) {
   await tx.wait();
   return bids;
 }
+export async function editListing(
+  { contractAddress, tokenId, purchasePrice },
+  { escrowListings }
+) {
+  const price = ethers.utils.parseEther(purchasePrice.toString());
+
+  const tx = await escrowListings.updateListing(
+    contractAddress,
+    tokenId,
+    price
+  );
+  await tx.wait();
+
+  return { contractAddress, tokenId, purchasePrice };
+}
 
 export async function createLazyMintVoucher(
   { title, description, image, price, royaltyBps = 500 },
