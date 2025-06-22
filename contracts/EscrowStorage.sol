@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -18,7 +19,7 @@ contract EscrowStorage is AccessControl, Pausable {
     uint256 public constant ANTI_SNIPING_WINDOW = 5 minutes;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE")
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     struct Bid {
         address bidder;
@@ -75,7 +76,7 @@ contract EscrowStorage is AccessControl, Pausable {
         _grantRole(ADMIN_ROLE, msg.sender);
         doArt = IDoArt(_doArtContract);
         _grantRole(PAUSER_ROLE, msg.sender);
-        doArt = IDoArt(_doArtContract);
+        
     }
     
     function pause() external onlyRole(PAUSER_ROLE) {

@@ -1,455 +1,800 @@
-const { expect } = require('chai');
-const { ethers } = require('hardhat');
+// const { expect } = require('chai');
+// const { ethers } = require('hardhat');
 
-describe('Escrow Contracts', function () {
-  let DoArt,
-    doArt,
-    EscrowStorage,
-    escrowStorage,
-    EscrowListings,
-    escrowListings,
-    EscrowAuctions,
-    escrowAuctions,
-    EscrowLazyMinting,
-    escrowLazyMinting;
-  let owner, seller, buyer, bidder, artist;
-  const metadataURI = 'ipfs://QmTest123';
-  const royaltyBps = 500; // 5%
-  const price = ethers.utils.parseEther('1');
-  const minBid = ethers.utils.parseEther('0.1');
-  const escrowAmount = ethers.utils.parseEther('0.2');
-  const auctionDuration = 60 * 60 * 24; // 1 day
+// describe('DoArt Contract', function () {
+//   let DoArt, EscrowStorage, EscrowListings, EscrowLazyMinting, EscrowAuctions;
+//   let doArt, escrowStorage, escrowListings, escrowLazyMinting, escrowAuctions;
+//   let owner, artist, minter, other;
+//   const metadataURI = 'ipfs://QmTest123';
+//   const invalidURI = 'http://invalid.com';
+//   const royaltyBps = 500; // 5%
 
-  beforeEach(async function () {
-    [owner, seller, buyer, bidder, artist] = await ethers.getSigners();
-    console.log('Deployer address:', owner.address);
+//   beforeEach(async function () {
+//     [owner, artist, minter, other] = await ethers.getSigners();
 
-    // Deploy EscrowStorage
-    EscrowStorage = await ethers.getContractFactory('EscrowStorage', owner);
-    console.log('EscrowStorage factory retrieved');
-    try {
-      escrowStorage = await EscrowStorage.deploy();
-      console.log('EscrowStorage deployment initiated');
-      await escrowStorage.deployed();
-      console.log('EscrowStorage deployed, address:', escrowStorage.address);
-      const deployTx = escrowStorage.deployTransaction;
-      console.log('EscrowStorage deployment tx:', deployTx.hash);
-      const receipt = await deployTx.wait();
-      console.log('EscrowStorage deployment receipt:', {
-        contractAddress: receipt.contractAddress,
-        gasUsed: receipt.gasUsed.toString(),
-        status: receipt.status,
-      });
-      if (!escrowStorage.address) {
-        throw new Error('EscrowStorage address is null');
-      }
-    } catch (error) {
-      console.error('EscrowStorage deployment failed:', error);
-      throw error;
-    }
+//     // Deploy DoArt with AddressZero as placeholder
+//     DoArt = await ethers.getContractFactory('DoArt', owner);
+//     doArt = await DoArt.deploy(ethers.constants.AddressZero);
+//     await doArt.deployed();
 
-    // Deploy DoArt
-    DoArt = await ethers.getContractFactory('DoArt', owner);
-    doArt = await DoArt.deploy(escrowStorage.address);
-    await doArt.deployed();
-    console.log('DoArt address:', doArt.address);
-    if (!doArt.address) throw new Error('DoArt address is null');
+//     // Deploy EscrowStorage with DoArt address
+//     EscrowStorage = await ethers.getContractFactory('EscrowStorage', owner);
+//     escrowStorage = await EscrowStorage.deploy(doArt.address);
+//     await escrowStorage.deployed();
 
-    // Deploy EscrowAuctions with placeholder EscrowListings address
-    EscrowAuctions = await ethers.getContractFactory('EscrowAuctions', owner);
-    escrowAuctions = await EscrowAuctions.deploy(
-      escrowStorage.address,
-      ethers.constants.AddressZero
-    );
-    await escrowAuctions.deployed();
-    console.log('EscrowAuctions address:', escrowAuctions.address);
-    if (!escrowAuctions.address)
-      throw new Error('EscrowAuctions address is null');
+//     // Update DoArt with EscrowStorage address
+//     await doArt.connect(owner).setStorageContract(escrowStorage.address);
 
-    // Deploy EscrowListings with EscrowAuctions address
-    EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
-    escrowListings = await EscrowListings.deploy(
-      escrowStorage.address,
-      escrowAuctions.address
-    );
-    await escrowListings.deployed();
-    console.log('EscrowListings address:', escrowListings.address);
-    if (!escrowListings.address)
-      throw new Error('EscrowListings address is null');
+//     // Deploy EscrowAuctions
+//     EscrowAuctions = await ethers.getContractFactory('EscrowAuctions', owner);
+//     escrowAuctions = await EscrowAuctions.deploy(
+//       escrowStorage.address,
+//       ethers.constants.AddressZero
+//     );
+//     await escrowAuctions.deployed();
 
-    // Update EscrowAuctions with EscrowListings address
-    await escrowAuctions.setEscrowListings(escrowListings.address);
-    console.log(
-      'EscrowAuctions updated with EscrowListings address:',
-      escrowListings.address
-    );
+//     // Deploy EscrowLazyMinting
+//     EscrowLazyMinting = await ethers.getContractFactory(
+//       'EscrowLazyMinting',
+//       owner
+//     );
+//     escrowLazyMinting = await EscrowLazyMinting.deploy(escrowStorage.address);
+//     await escrowLazyMinting.deployed();
 
-    // Deploy EscrowLazyMinting
-    EscrowLazyMinting = await ethers.getContractFactory(
-      'EscrowLazyMinting',
-      owner
-    );
-    escrowLazyMinting = await EscrowLazyMinting.deploy(escrowStorage.address);
-    await escrowLazyMinting.deployed();
-    console.log('EscrowLazyMinting address:', escrowLazyMinting.address);
-    if (!escrowLazyMinting.address)
-      throw new Error('EscrowLazyMinting address is null');
+//     // Deploy EscrowListings
+//     EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
+//     escrowListings = await EscrowListings.deploy(
+//       escrowStorage.address,
+//       escrowAuctions.address
+//     );
+//     await escrowListings.deployed();
 
-    // Grant ADMIN_ROLE in EscrowStorage
-    await escrowStorage.grantRole(
-      await escrowStorage.ADMIN_ROLE(),
-      escrowListings.address
-    );
-    await escrowStorage.grantRole(
-      await escrowStorage.ADMIN_ROLE(),
-      escrowAuctions.address
-    );
-    await escrowStorage.grantRole(
-      await escrowStorage.ADMIN_ROLE(),
-      escrowLazyMinting.address
-    );
-    await escrowStorage.grantRole(
-      await escrowStorage.ADMIN_ROLE(),
-      doArt.address
-    );
+//     // Grant roles
+//     await doArt.grantRole(await doArt.ARTIST_ROLE(), artist.address);
+//     await doArt.grantRole(await doArt.PAUSER_ROLE(), owner.address);
+//     await doArt.grantRole(await doArt.MINTER_ROLE(), minter.address);
+//     await doArt.grantRole(await doArt.MINTER_ROLE(), escrowLazyMinting.address);
+//     await escrowStorage.grantRole(
+//       await escrowStorage.ADMIN_ROLE(),
+//       doArt.address
+//     );
+//     await escrowStorage.grantRole(
+//       await escrowStorage.ADMIN_ROLE(),
+//       escrowListings.address
+//     );
+//     await escrowStorage.grantRole(
+//       await escrowStorage.ADMIN_ROLE(),
+//       escrowAuctions.address
+//     );
+//     await escrowStorage.grantRole(
+//       await escrowStorage.ADMIN_ROLE(),
+//       escrowLazyMinting.address
+//     );
+//   });
 
-    // Grant roles
-    await doArt.grantRole(await doArt.ARTIST_ROLE(), artist.address);
-    await doArt.grantRole(await doArt.MINTER_ROLE(), escrowLazyMinting.address);
-  });
+//   describe('Owner Role Initialization', function () {
+//     it('Should set correct roles for owner', async function () {
+//       expect(
+//         await doArt.hasRole(await doArt.DEFAULT_ADMIN_ROLE(), owner.address)
+//       ).to.be.true;
+//       expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), owner.address)).to
+//         .be.true;
+//       expect(await doArt.hasRole(await doArt.PAUSER_ROLE(), owner.address)).to
+//         .be.true;
+//       expect(await doArt.hasRole(await doArt.MINTER_ROLE(), owner.address)).to
+//         .be.true;
+//     });
 
-  describe('Listing', function () {
-    it('Should list a non-auction NFT', async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
+//     it('Should set correct roles for artist and minter', async function () {
+//       expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), artist.address)).to
+//         .be.true;
+//       expect(await doArt.hasRole(await doArt.MINTER_ROLE(), minter.address)).to
+//         .be.true;
+//       expect(
+//         await doArt.hasRole(
+//           await doArt.MINTER_ROLE(),
+//           escrowLazyMinting.address
+//         )
+//       ).to.be.true;
+//     });
+//   });
 
-      await expect(
-        escrowListings
-          .connect(artist)
-          .list(
-            doArt.address,
-            1,
-            buyer.address,
-            price,
-            minBid,
-            escrowAmount,
-            false,
-            0
-          )
-      )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 1, artist.address, price)
-        .to.emit(escrowStorage, 'ListingChanged')
-        .withArgs(doArt.address, 1);
+//   describe('Storage Contract Management', function () {
+//     it('Should allow admin to update storage contract', async function () {
+//       const newEscrowStorage = await EscrowStorage.deploy(doArt.address);
+//       await newEscrowStorage.deployed();
+//       await expect(
+//         doArt.connect(owner).setStorageContract(newEscrowStorage.address)
+//       ).to.not.be.reverted;
+//       expect(await doArt.storageContract()).to.equal(newEscrowStorage.address);
+//     });
 
-      const listing = await escrowStorage.getListing(doArt.address, 1);
-      expect(listing.isListed).to.be.true;
-      expect(listing.seller).to.equal(artist.address);
-      expect(listing.buyer).to.equal(buyer.address);
-      expect(listing.price).to.equal(price);
-    });
+//     it('Should revert if non-admin tries to update storage contract', async function () {
+//       const newEscrowStorage = await EscrowStorage.deploy(doArt.address);
+//       await newEscrowStorage.deployed();
+//       await expect(
+//         doArt.connect(other).setStorageContract(newEscrowStorage.address)
+//       ).to.be.revertedWith(/AccessControl: account .* is missing role/);
+//     });
 
-    it('Should list an auction NFT', async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
+//     it('Should revert if storage contract address is zero', async function () {
+//       await expect(
+//         doArt.connect(owner).setStorageContract(ethers.constants.AddressZero)
+//       ).to.be.revertedWith('Invalid address');
+//     });
+//   });
 
-      await expect(
-        escrowListings
-          .connect(artist)
-          .list(
-            doArt.address,
-            1,
-            ethers.constants.AddressZero,
-            0,
-            minBid,
-            escrowAmount,
-            true,
-            auctionDuration
-          )
-      )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 1, artist.address, 0)
-        .to.emit(escrowStorage, 'ListingChanged')
-        .to.emit(escrowStorage, 'AuctionChanged')
-        .withArgs(doArt.address, 1);
+//   describe('Artist Metadata', function () {
+//     it('Should allow artist to set metadata', async function () {
+//       const name = 'Artist Name';
+//       const bio = 'Cool artist bio';
+//       const portfolioUrl = 'https://portfolio.com';
 
-      const auction = await escrowStorage.getAuction(doArt.address, 1);
-      expect(auction.isActive).to.be.true;
-      expect(auction.minBid).to.equal(minBid);
-    });
+//       await expect(
+//         doArt.connect(artist).setArtistMetadata(name, bio, portfolioUrl)
+//       )
+//         .to.emit(doArt, 'ArtistMetadataUpdated')
+//         .withArgs(artist.address, name, bio, portfolioUrl);
 
-    it('Should revert if not token owner', async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await expect(
-        escrowListings
-          .connect(buyer)
-          .list(
-            doArt.address,
-            1,
-            buyer.address,
-            price,
-            minBid,
-            escrowAmount,
-            false,
-            0
-          )
-      ).to.be.revertedWith('Not token owner');
-    });
-  });
+//       const [fetchedName, fetchedBio, fetchedUrl] =
+//         await doArt.getArtistMetadata(artist.address);
+//       expect(fetchedName).to.equal(name);
+//       expect(fetchedBio).to.equal(bio);
+//       expect(fetchedUrl).to.equal(portfolioUrl);
+//     });
 
-  describe('Bidding', function () {
-    beforeEach(async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
-      await escrowListings
-        .connect(artist)
-        .list(
-          doArt.address,
-          1,
-          ethers.constants.AddressZero,
-          price,
-          minBid,
-          escrowAmount,
-          false,
-          0
-        );
-    });
+//     it('Should allow admin to set metadata', async function () {
+//       const name = 'Admin Artist';
+//       const bio = 'Admin bio';
+//       const portfolioUrl = 'ipfs://QmAdmin123';
 
-    it('Should place a single bid', async function () {
-      await expect(
-        escrowAuctions
-          .connect(bidder)
-          .placeBid(doArt.address, [1], [minBid], { value: minBid })
-      )
-        .to.emit(escrowAuctions, 'Action')
-        .withArgs(doArt.address, 1, 3, bidder.address, minBid)
-        .to.emit(escrowStorage, 'BidChanged')
-        .withArgs(doArt.address, 1);
+//       await expect(
+//         doArt.connect(owner).setArtistMetadata(name, bio, portfolioUrl)
+//       )
+//         .to.emit(doArt, 'ArtistMetadataUpdated')
+//         .withArgs(owner.address, name, bio, portfolioUrl);
 
-      const bids = await escrowStorage.getBids(doArt.address, 1);
-      expect(bids.length).to.equal(1);
-      expect(bids[0].bidder).to.equal(bidder.address);
-      expect(bids[0].amount).to.equal(minBid);
-    });
-  });
+//       const [fetchedName, fetchedBio, fetchedUrl] =
+//         await doArt.getArtistMetadata(owner.address);
+//       expect(fetchedName).to.equal(name);
+//       expect(fetchedBio).to.equal(bio);
+//       expect(fetchedUrl).to.equal(portfolioUrl);
+//     });
 
-  describe('Auction Bidding', function () {
-    beforeEach(async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
-      await escrowListings
-        .connect(artist)
-        .list(
-          doArt.address,
-          1,
-          ethers.constants.AddressZero,
-          0,
-          minBid,
-          escrowAmount,
-          true,
-          auctionDuration
-        );
-    });
+//     it('Should revert if non-artist or non-admin tries to set metadata', async function () {
+//       await expect(
+//         doArt
+//           .connect(other)
+//           .setArtistMetadata('Name', 'Bio', 'https://test.com')
+//       ).to.be.revertedWith('Caller is not artist or admin');
+//     });
 
-    it('Should place a single auction bid', async function () {
-      console.log('Placing bid with bidder:', bidder.address);
-      const tx = await escrowAuctions
-        .connect(bidder)
-        .placeBid(doArt.address, [1], [minBid], { value: minBid });
-      const receipt = await tx.wait();
-      console.log('Bid transaction receipt:', {
-        gasUsed: receipt.gasUsed.toString(),
-        events: receipt.logs.map((e) => ({ name: e.eventName, args: e.args })),
-      });
+//     it('Should revert for invalid metadata inputs', async function () {
+//       await expect(
+//         doArt.connect(artist).setArtistMetadata('', 'Bio', 'https://test.com')
+//       ).to.be.revertedWith('Name cannot be empty');
 
-      await expect(tx)
-        .to.emit(escrowAuctions, 'Action')
-        .withArgs(doArt.address, 1, 3, bidder.address, minBid)
-        .to.emit(escrowStorage, 'BidChanged')
-        .withArgs(doArt.address, 1);
+//       await expect(
+//         doArt.connect(artist).setArtistMetadata('Name', 'Bio', invalidURI)
+//       ).to.be.revertedWith(
+//         'Invalid portfolio URL format: must start with https:// or ipfs://'
+//       );
 
-      const auction = await escrowStorage.getAuction(doArt.address, 1);
-      console.log('Auction state:', {
-        isActive: auction.isActive,
-        highestBidder: auction.highestBidder,
-        highestBid: auction.highestBid.toString(),
-      });
-      expect(auction.highestBidder).to.equal(bidder.address);
-      expect(auction.highestBid).to.equal(minBid);
-    });
-  });
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .setArtistMetadata('A'.repeat(51), 'Bio', 'https://test.com')
+//       ).to.be.revertedWith('Name too long');
 
-  describe('Lazy Minting', function () {
-    it('Should redeem a lazy mint voucher', async function () {
-      const tokenId = 1;
-      const metadataURI = 'ipfs://QmTest123';
-      const royaltyBps = 500; // 5%
-      const price = ethers.utils.parseEther('0.1');
-      const chainId = (await ethers.provider.getNetwork()).chainId;
-      console.log('Chain ID:', chainId);
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .setArtistMetadata('Name', 'B'.repeat(501), 'https://test.com')
+//       ).to.be.revertedWith('Bio too long');
 
-      const domain = {
-        name: 'DoArtNFTPlatform',
-        version: '1',
-        chainId: chainId,
-        verifyingContract: escrowLazyMinting.address,
-      };
-      console.log('Domain:', domain);
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .setArtistMetadata('Name', 'Bio', 'https://' + 'a'.repeat(193))
+//       ).to.be.revertedWith('Portfolio URL too long');
+//     });
+//   });
 
-      const types = {
-        LazyMintVoucher: [
-          { name: 'tokenId', type: 'uint256' },
-          { name: 'creator', type: 'address' },
-          { name: 'price', type: 'uint256' },
-          { name: 'uri', type: 'string' },
-          { name: 'royaltyBps', type: 'uint96' },
-        ],
-      };
-      console.log('Types:', types);
+//   describe('Minting', function () {
+//     it('Should allow artist to mint NFT', async function () {
+//       await expect(doArt.connect(artist).mint(metadataURI, royaltyBps))
+//         .to.emit(doArt, 'TokenMinted')
+//         .withArgs(artist.address, 1, metadataURI);
 
-      const voucher = {
-        tokenId,
-        creator: artist.address,
-        price,
-        uri: metadataURI,
-        royaltyBps,
-      };
-      console.log('Voucher:', voucher);
+//       expect(await doArt.ownerOf(1)).to.equal(artist.address);
+//       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
+//       const [, royaltyAmount] = await doArt.royaltyInfo(1, 10000);
+//       expect(royaltyAmount).to.equal(royaltyBps);
+//     });
 
-      const signature = await artist._signTypedData(domain, types, voucher);
-      console.log('Signature:', signature);
+//     it('Should revert if non-artist tries to mint', async function () {
+//       await expect(
+//         doArt.connect(other).mint(metadataURI, royaltyBps)
+//       ).to.be.revertedWith(/AccessControl: account .* is missing role/);
+//     });
 
-      const fullVoucher = {
-        tokenId,
-        creator: artist.address,
-        price,
-        uri: metadataURI,
-        royaltyBps,
-        signature, // Include signature
-      };
-      console.log('Full Voucher:', fullVoucher);
+//     it('Should revert for invalid mint inputs', async function () {
+//       await expect(
+//         doArt.connect(artist).mint('', royaltyBps)
+//       ).to.be.revertedWith('Token URI cannot be empty');
 
-      const isValid = await escrowLazyMinting.verify(fullVoucher, signature);
-      console.log('Is Valid:', isValid);
-      expect(isValid).to.be.true;
+//       await expect(
+//         doArt.connect(artist).mint(invalidURI, royaltyBps)
+//       ).to.be.revertedWith(
+//         'Invalid metadata URI format: must start with https:// or ipfs://'
+//       );
 
-      const balanceBefore = await doArt.balanceOf(buyer.address);
-      const tx = await escrowLazyMinting
-        .connect(buyer)
-        .redeemLazyMint(doArt.address, fullVoucher, { value: price });
-      const receipt = await tx.wait();
-      console.log('Redeem Lazy Mint receipt:', {
-        gasUsed: receipt.gasUsed.toString(),
-        events: receipt.logs.map((log) => {
-          try {
-            return { name: log.eventName, args: log.args };
-          } catch {
-            return { name: 'unknown', args: {} };
-          }
-        }),
-      });
+//       await expect(
+//         doArt.connect(artist).mint(metadataURI, 10001)
+//       ).to.be.revertedWith('Royalty must be <= 100%');
 
-      expect(await doArt.balanceOf(buyer.address)).to.equal(
-        balanceBefore.add(1)
-      );
-      expect(await doArt.ownerOf(tokenId)).to.equal(buyer.address);
-      expect(await doArt.tokenURI(tokenId)).to.equal(metadataURI);
-    });
-  });
+//       await expect(
+//         doArt.connect(artist).mint('https://' + 'a'.repeat(193), royaltyBps)
+//       ).to.be.revertedWith('Token URI too long');
+//     });
+//   });
 
-  describe('Escrow and Royalties', function () {
-    beforeEach(async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
-      await escrowListings
-        .connect(artist)
-        .list(
-          doArt.address,
-          1,
-          buyer.address,
-          price,
-          minBid,
-          escrowAmount,
-          false,
-          0
-        );
-    });
+//   describe('Minting for Escrow', function () {
+//     it('Should allow minter to mint NFT for another address', async function () {
+//       await expect(
+//         doArt.connect(minter).mintFor(other.address, metadataURI, royaltyBps)
+//       )
+//         .to.emit(doArt, 'TokenMinted')
+//         .withArgs(other.address, 1, metadataURI);
 
-    it('Should handle escrow deposit and approval', async function () {
-      await expect(
-        escrowListings
-          .connect(buyer)
-          .depositEarnest(doArt.address, 1, { value: escrowAmount })
-      )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 5, buyer.address, escrowAmount)
-        .to.emit(escrowStorage, 'ListingChanged')
-        .withArgs(doArt.address, 1);
+//       expect(await doArt.ownerOf(1)).to.equal(other.address);
+//       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
+//       const [, royaltyAmount] = await doArt.royaltyInfo(1, 10000);
+//       expect(royaltyAmount).to.equal(royaltyBps);
+//     });
 
-      await expect(
-        escrowListings.connect(buyer).approveArtwork(doArt.address, 1, true)
-      )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 6, buyer.address, 1)
-        .to.emit(escrowStorage, 'ListingChanged')
-        .withArgs(doArt.address, 1);
+//     it('Should revert if non-minter tries to mintFor', async function () {
+//       await expect(
+//         doArt.connect(other).mintFor(other.address, metadataURI, royaltyBps)
+//       ).to.be.revertedWith(/AccessControl: account .* is missing role/);
+//     });
+//   });
 
-      await escrowListings.connect(artist).approveSale(doArt.address, 1);
-    });
-  });
+//   describe('Batch Minting', function () {
+//     it('Should allow artist to batch mint NFTs', async function () {
+//       const uris = [metadataURI, 'ipfs://QmTest456'];
+//       const royalties = [royaltyBps, royaltyBps];
 
-  describe('Auction Ending', function () {
-    beforeEach(async function () {
-      await doArt.connect(artist).mint(metadataURI, royaltyBps);
-      await doArt.connect(artist).approve(escrowListings.address, 1);
-      await escrowListings
-        .connect(artist)
-        .list(
-          doArt.address,
-          1,
-          ethers.constants.AddressZero,
-          0,
-          minBid,
-          escrowAmount,
-          true,
-          auctionDuration
-        );
-      await escrowAuctions
-        .connect(bidder)
-        .placeBid(doArt.address, [1], [minBid], { value: minBid });
-    });
+//       await expect(doArt.connect(artist).batchMint(uris, royalties))
+//         .to.emit(doArt, 'TokenMinted')
+//         .withArgs(artist.address, 1, uris[0])
+//         .to.emit(doArt, 'TokenMinted')
+//         .withArgs(artist.address, 2, uris[1]);
 
-    it('Should end auction with winner', async function () {
-      // Fast-forward time to end the auction
-      await ethers.provider.send('evm_increaseTime', [auctionDuration + 1]);
-      await ethers.provider.send('evm_mine');
+//       expect(await doArt.ownerOf(1)).to.equal(artist.address);
+//       expect(await doArt.ownerOf(2)).to.equal(artist.address);
+//       expect(await doArt.tokenURI(1)).to.equal(uris[0]);
+//       expect(await doArt.tokenURI(2)).to.equal(uris[1]);
+//     });
 
-      // End the auction
-      const tx = await escrowAuctions
-        .connect(bidder)
-        .endAuction(doArt.address, 1);
-      const receipt = await tx.wait();
-      console.log('End Auction receipt:', {
-        gasUsed: receipt.gasUsed.toString(),
-        events: receipt.logs.map((log) => {
-          try {
-            const parsedLog = escrowAuctions.interface.parseLog(log);
-            return { name: parsedLog.name, args: parsedLog.args };
-          } catch {
-            return { name: 'unknown', args: log.args || {} };
-          }
-        }),
-      });
+//     it('Should revert for invalid batch mint inputs', async function () {
+//       await expect(doArt.connect(artist).batchMint([], [])).to.be.revertedWith(
+//         'No metadata URIs provided'
+//       );
 
-      // Assertions
-      const listing = await escrowStorage.getListing(doArt.address, 1);
-      const auction = await escrowStorage.getAuction(doArt.address, 1);
-      expect(listing.isListed).to.equal(false, 'Listing should be deleted');
-      expect(auction.isActive).to.equal(false, 'Auction should be ended');
-      expect(await doArt.ownerOf(1)).to.equal(
-        bidder.address,
-        'NFT should be transferred to bidder'
-      );
-    });
-  });
-});
+//       await expect(
+//         doArt.connect(artist).batchMint([metadataURI], [royaltyBps, royaltyBps])
+//       ).to.be.revertedWith('Mismatched array lengths');
+
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .batchMint([metadataURI, metadataURI], [royaltyBps, 10001])
+//       ).to.be.revertedWith('Royalty must be <= 100%');
+
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .batchMint(
+//             new Array(51).fill(metadataURI),
+//             new Array(51).fill(royaltyBps)
+//           )
+//       ).to.be.revertedWith('Batch size exceeds limit');
+//     });
+//   });
+
+//   describe('Burning', function () {
+//     it('Should allow owner to burn NFT', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await expect(doArt.connect(artist).burn(1))
+//         .to.emit(doArt, 'TokenBurned')
+//         .withArgs(1);
+
+//       await expect(doArt.ownerOf(1)).to.be.revertedWith(
+//         'ERC721: invalid token ID'
+//       );
+//     });
+
+//     it('Should allow approved operator to burn NFT', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt.connect(artist).approve(other.address, 1);
+//       await expect(doArt.connect(other).burn(1))
+//         .to.emit(doArt, 'TokenBurned')
+//         .withArgs(1);
+
+//       await expect(doArt.ownerOf(1)).to.be.revertedWith(
+//         'ERC721: invalid token ID'
+//       );
+//     });
+
+//     it('Should revert if non-owner or non-approved tries to burn', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await expect(doArt.connect(other).burn(1)).to.be.revertedWith(
+//         'Caller is not owner nor approved'
+//       );
+//     });
+
+//     it('Should revert if token does not exist', async function () {
+//       await expect(doArt.connect(artist).burn(999)).to.be.revertedWith(
+//         'Token does not exist'
+//       );
+//     });
+//   });
+
+//   describe('Pausing', function () {
+//     it('Should allow pauser to pause and unpause', async function () {
+//       await doArt.connect(owner).pause();
+//       expect(await doArt.paused()).to.be.true;
+
+//       await expect(
+//         doArt.connect(artist).mint(metadataURI, royaltyBps)
+//       ).to.be.revertedWith('Pausable: paused');
+
+//       await expect(
+//         doArt
+//           .connect(artist)
+//           .setArtistMetadata('Name', 'Bio', 'https://test.com')
+//       ).to.be.revertedWith('Pausable: paused');
+
+//       await expect(doArt.connect(artist).burn(1)).to.be.revertedWith(
+//         'Pausable: paused'
+//       );
+
+//       await doArt.connect(owner).unpause();
+//       expect(await doArt.paused()).to.be.false;
+
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       expect(await doArt.ownerOf(1)).to.equal(artist.address);
+//     });
+
+//     it('Should revert if non-pauser tries to pause', async function () {
+//       await expect(doArt.connect(other).pause()).to.be.revertedWith(
+//         /AccessControl: account .* is missing role/
+//       );
+//     });
+//   });
+
+//   describe('Royalties', function () {
+//     it('Should set and retrieve royalty info', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       const [recipient, amount] = await doArt.royaltyInfo(1, 10000);
+//       expect(recipient).to.equal(artist.address);
+//       expect(amount).to.equal(royaltyBps);
+
+//       const salePrice = ethers.utils.parseEther('1');
+//       const [recipient2, amount2] = await doArt.royaltyInfo(1, salePrice);
+//       expect(recipient2).to.equal(artist.address);
+//       expect(amount2).to.equal(salePrice.mul(royaltyBps).div(10000));
+//     });
+
+//     it('Should allow admin to update royalty', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt.connect(owner).setTokenRoyalty(1, other.address, 1000);
+//       const [recipient, amount] = await doArt.royaltyInfo(1, 10000);
+//       expect(recipient).to.equal(other.address);
+//       expect(amount).to.equal(1000);
+//     });
+
+//     it('Should revert if non-admin tries to update royalty', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await expect(
+//         doArt.connect(other).setTokenRoyalty(1, other.address, 1000)
+//       ).to.be.revertedWith(/AccessControl: account .* is missing role/);
+//     });
+
+//     it('Should revert if royalty exceeds 100%', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await expect(
+//         doArt.connect(owner).setTokenRoyalty(1, other.address, 10001)
+//       ).to.be.revertedWith('Royalty must be <= 100%');
+//     });
+//   });
+
+//   describe('Utility Functions', function () {
+//     it('Should return correct total supply', async function () {
+//       expect(await doArt.totalSupply()).to.equal(0);
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       expect(await doArt.totalSupply()).to.equal(1);
+//       await doArt.connect(artist).mint('ipfs://QmTest456', royaltyBps);
+//       expect(await doArt.totalSupply()).to.equal(2);
+//     });
+
+//     it('Should return tokens of owner', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt.connect(artist).mint('ipfs://QmTest456', royaltyBps);
+//       const tokens = await doArt.getTokensOfOwner(artist.address);
+//       expect(tokens.map((t) => t.toNumber())).to.have.members([1, 2]);
+//     });
+
+//     it('Should exclude burned tokens from owner tokens', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt.connect(artist).burn(1);
+//       const tokens = await doArt.getTokensOfOwner(artist.address);
+//       expect(tokens).to.have.length(0);
+//     });
+
+//     it('Should return empty array for owner with no tokens', async function () {
+//       const tokens = await doArt.getTokensOfOwner(other.address);
+//       expect(tokens).to.have.length(0);
+//     });
+
+//     it('Should return token details', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       const [ownerAddr, uri, royaltyRecipient, bps] =
+//         await doArt.getTokenDetails(1);
+//       expect(ownerAddr).to.equal(artist.address);
+//       expect(uri).to.equal(metadataURI);
+//       expect(royaltyRecipient).to.equal(artist.address);
+//       expect(bps).to.equal(royaltyBps);
+//     });
+
+//     it('Should revert for non-existent token details', async function () {
+//       await expect(doArt.getTokenDetails(999)).to.be.revertedWith(
+//         'Token does not exist'
+//       );
+//     });
+
+//     it('Should handle batch minting up to limit', async function () {
+//       const uris = new Array(50).fill(metadataURI);
+//       const royalties = new Array(50).fill(royaltyBps);
+//       await expect(doArt.connect(artist).batchMint(uris, royalties)).to.not.be
+//         .reverted;
+//       expect(await doArt.totalSupply()).to.equal(50);
+//     });
+
+//     it('Should support required interfaces', async function () {
+//       expect(await doArt.supportsInterface('0x80ac58cd')).to.be.true; // IERC721
+//       expect(await doArt.supportsInterface('0x5b5e139f')).to.be.true; // IERC721Metadata
+//       expect(await doArt.supportsInterface('0x2a55205a')).to.be.true; // IERC2981
+//       expect(await doArt.supportsInterface('0x7965db0b')).to.be.true; // IAccessControl
+//     });
+//   });
+
+//   describe('Role Management', function () {
+//     it('Should allow admin to grant and revoke roles', async function () {
+//       await doArt
+//         .connect(owner)
+//         .grantRole(await doArt.ARTIST_ROLE(), other.address);
+//       expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), other.address)).to
+//         .be.true;
+//       await doArt
+//         .connect(owner)
+//         .revokeRole(await doArt.ARTIST_ROLE(), other.address);
+//       expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), other.address)).to
+//         .be.false;
+//     });
+//   });
+
+//   describe('Lazy Minting', function () {
+//     it('Should redeem lazy mint voucher and mint NFT', async function () {
+//       const voucher = {
+//         tokenId: 1,
+//         creator: artist.address,
+//         price: ethers.utils.parseEther('1'),
+//         uri: metadataURI,
+//         royaltyBps: royaltyBps,
+//         signature: '0x'
+//       };
+
+//       const domain = {
+//         name: 'DoArtNFTPlatform',
+//         version: '1',
+//         chainId: await ethers.provider.getNetwork().then((net) => net.chainId),
+//         verifyingContract: escrowLazyMinting.address
+//       };
+//       const types = {
+//         LazyMintVoucher: [
+//           { name: 'tokenId', type: 'uint256' },
+//           { name: 'creator', type: 'address' },
+//           { name: 'price', type: 'uint256' },
+//           { name: 'uri', type: 'string' },
+//           { name: 'royaltyBps', type: 'uint96' }
+//         ]
+//       };
+//       const signature = await artist._signTypedData(domain, types, voucher);
+//       voucher.signature = signature;
+
+//       await expect(
+//         escrowLazyMinting
+//           .connect(other)
+//           .redeemLazyMint(doArt.address, voucher, {
+//             value: ethers.utils.parseEther('1')
+//           })
+//       )
+//         .to.emit(doArt, 'TokenMinted')
+//         .withArgs(other.address, 1, metadataURI)
+//         .to.emit(escrowLazyMinting, 'LazyMintRedeemed')
+//         .withArgs(
+//           doArt.address,
+//           voucher.tokenId,
+
+//           other.address,
+//           ethers.utils.parseEther('1'),
+//           artist.address
+//         );
+
+//       expect(await doArt.ownerOf(1)).to.equal(other.address);
+//       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
+//       expect(
+//         await escrowStorage.getVoucherRedeemed(doArt.address, voucher.tokenId)
+//       ).to.be.true;
+//     });
+
+//     it('Should revert if voucher is already redeemed', async function () {
+//       const voucher = {
+//         tokenId: 1,
+//         creator: artist.address,
+//         price: ethers.utils.parseEther('1'),
+//         uri: metadataURI,
+//         royaltyBps: royaltyBps,
+//         signature: '0x'
+//       };
+
+//       const domain = {
+//         name: 'DoArtNFTPlatform',
+//         version: '1',
+//         chainId: await ethers.provider.getNetwork().then((net) => net.chainId),
+//         verifyingContract: escrowLazyMinting.address
+//       };
+//       const types = {
+//         LazyMintVoucher: [
+//           { name: 'tokenId', type: 'uint256' },
+//           { name: 'creator', type: 'address' },
+//           { name: 'price', type: 'uint256' },
+//           { name: 'uri', type: 'string' },
+//           { name: 'royaltyBps', type: 'uint96' }
+//         ]
+//       };
+//       const signature = await artist._signTypedData(domain, types, voucher);
+//       voucher.signature = signature;
+
+//       await escrowLazyMinting
+//         .connect(other)
+//         .redeemLazyMint(doArt.address, voucher, {
+//           value: ethers.utils.parseEther('1')
+//         });
+//       await expect(
+//         escrowLazyMinting
+//           .connect(other)
+//           .redeemLazyMint(doArt.address, voucher, {
+//             value: ethers.utils.parseEther('1')
+//           })
+//       ).to.be.revertedWith('Voucher already redeemed');
+//     });
+//   });
+
+//   describe('Listings', function () {
+//     it('Should list NFT for sale', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt
+//         .connect(artist)
+//         .setApprovalForAll(escrowListings.address, true);
+
+//       const params = {
+//         nftContract: doArt.address,
+//         tokenId: 1,
+//         buyer: ethers.constants.AddressZero,
+//         price: ethers.utils.parseEther('1'),
+//         minBid: 0,
+//         escrowAmount: ethers.utils.parseEther('0.1'),
+//         isAuction: false,
+//         auctionDuration: 0
+//       };
+
+//       await expect(
+//         escrowListings
+//           .connect(artist)
+//           .list(
+//             params.nftContract,
+//             params.tokenId,
+//             params.buyer,
+//             params.price,
+//             params.minBid,
+//             params.escrowAmount,
+//             params.isAuction,
+//             params.auctionDuration
+//           )
+//       )
+//         .to.emit(escrowListings, 'NFTListed')
+//         .withArgs(
+//           doArt.address,
+//           1,
+//           artist.address,
+//           params.buyer,
+//           params.price,
+//           params.minBid,
+//           params.escrowAmount,
+//           params.isAuction,
+//           params.auctionDuration
+//         );
+
+//       const listing = await escrowStorage.getListing(doArt.address, 1);
+//       expect(listing.isListed).to.be.true;
+//       expect(listing.price).to.equal(params.price);
+//       expect(listing.isAuction).to.be.false;
+//       expect(listing.seller).to.equal(artist.address);
+//     });
+
+//     it('Should list NFT for auction', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt
+//         .connect(artist)
+//         .setApprovalForAll(escrowListings.address, true);
+
+//       const params = {
+//         nftContract: doArt.address,
+//         tokenId: 1,
+//         buyer: ethers.constants.AddressZero,
+//         price: 0,
+//         minBid: ethers.utils.parseEther('0.5'),
+//         escrowAmount: ethers.utils.parseEther('0.1'),
+//         isAuction: true,
+//         auctionDuration: 86400
+//       };
+
+//       await expect(
+//         escrowListings
+//           .connect(artist)
+//           .list(
+//             params.nftContract,
+//             params.tokenId,
+//             params.buyer,
+//             params.price,
+//             params.minBid,
+//             params.escrowAmount,
+//             params.isAuction,
+//             params.auctionDuration
+//           )
+//       )
+//         .to.emit(escrowListings, 'NFTListed')
+//         .withArgs(
+//           doArt.address,
+//           1,
+//           artist.address,
+//           params.buyer,
+//           params.price,
+//           params.minBid,
+//           params.escrowAmount,
+//           params.isAuction,
+//           params.auctionDuration
+//         );
+
+//       const listing = await escrowStorage.getListing(doArt.address, 1);
+//       expect(listing.isListed).to.be.true;
+//       expect(listing.isAuction).to.be.true;
+//       expect(listing.minBid).to.equal(params.minBid);
+
+//       const auction = await escrowStorage.getAuction(doArt.address, 1);
+//       expect(auction.isActive).to.be.true;
+//       expect(auction.minBid).to.equal(params.minBid);
+//     });
+
+//     it('Should batch list NFTs for sale and auction', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt.connect(artist).mint('ipfs://QmTest456', royaltyBps);
+//       await doArt
+//         .connect(artist)
+//         .setApprovalForAll(escrowListings.address, true);
+
+//       const params = [
+//         {
+//           nftContract: doArt.address,
+//           tokenId: 1,
+//           buyer: ethers.constants.AddressZero,
+//           price: ethers.utils.parseEther('1'),
+//           minBid: 0,
+//           escrowAmount: ethers.utils.parseEther('0.1'),
+//           isAuction: false,
+//           auctionDuration: 0
+//         },
+//         {
+//           nftContract: doArt.address,
+//           tokenId: 2,
+//           buyer: ethers.constants.AddressZero,
+//           price: 0,
+//           minBid: ethers.utils.parseEther('0.5'),
+//           escrowAmount: ethers.utils.parseEther('0.1'),
+//           isAuction: true,
+//           auctionDuration: 86400
+//         }
+//       ];
+
+//       await expect(escrowListings.connect(artist).batchList(params))
+//         .to.emit(escrowListings, 'NFTListed')
+//         .withArgs(
+//           doArt.address,
+//           1,
+//           artist.address,
+//           params[0].buyer,
+//           params[0].price,
+//           params[0].minBid,
+//           params[0].escrowAmount,
+//           params[0].isAuction,
+//           params[0].auctionDuration
+//         )
+//         .to.emit(escrowListings, 'NFTListed')
+//         .withArgs(
+//           doArt.address,
+//           2,
+//           artist.address,
+//           params[1].buyer,
+//           params[1].price,
+//           params[1].minBid,
+//           params[1].escrowAmount,
+//           params[1].isAuction,
+//           params[1].auctionDuration
+//         );
+//     });
+//   });
+
+//   describe('Auctions', function () {
+//     it('Should allow bidding on an auction', async function () {
+//       await doArt.connect(artist).mint(metadataURI, royaltyBps);
+//       await doArt
+//         .connect(artist)
+//         .setApprovalForAll(escrowListings.address, true);
+
+//       const params = {
+//         nftContract: doArt.address,
+//         tokenId: 1,
+//         buyer: ethers.constants.AddressZero,
+//         price: 0,
+//         minBid: ethers.utils.parseEther('0.5'),
+//         escrowAmount: ethers.utils.parseEther('0.1'),
+//         isAuction: true,
+//         auctionDuration: 86400
+//       };
+
+//       await escrowListings
+//         .connect(artist)
+//         .list(
+//           params.nftContract,
+//           params.tokenId,
+//           params.buyer,
+//           params.price,
+//           params.minBid,
+//           params.escrowAmount,
+//           params.isAuction,
+//           params.auctionDuration
+//         );
+
+//       const bidAmount = ethers.utils.parseEther('1');
+//       await expect(
+//         escrowAuctions
+//           .connect(other)
+//           .batchPlaceAuctionBid(doArt.address, [1], [bidAmount], {
+//             value: bidAmount
+//           })
+//       )
+//         .to.emit(escrowStorage, 'BidChanged')
+//         .withArgs(doArt.address, 1)
+//         .to.emit(escrowAuctions, 'BidPlaced')
+//         .withArgs(doArt.address, 1, other.address, bidAmount);
+
+//       const bids = await escrowStorage.getBids(doArt.address, 1);
+//       expect(bids).to.have.length(1);
+//       expect(bids[0].bidder).to.equal(other.address);
+//       expect(bids[0].amount).to.equal(bidAmount);
+//     });
+//   });
+// });

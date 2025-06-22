@@ -66,6 +66,10 @@ describe('DoArt Contract', function () {
       await escrowStorage.ADMIN_ROLE(),
       escrowAuctions.address
     );
+    await escrowStorage.grantRole(
+      await escrowStorage.ADMIN_ROLE(),
+      escrowLazyMinting.address
+    );
   });
 
   describe('Owner Role Initialization', function () {
@@ -422,6 +426,13 @@ describe('DoArt Contract', function () {
       expect(tokens.map((t) => t.toNumber())).to.have.members([1, 2]);
     });
 
+    it('Should exclude burned tokens from owner tokens', async function () {
+      await doArt.connect(artist).mint(metadataURI, royaltyBps);
+      await doArt.connect(artist).burn(1);
+      const tokens = await doArt.getTokensOfOwner(artist.address);
+      expect(tokens).to.have.length(0);
+    });
+
     it('Should return empty array for owner with no tokens', async function () {
       const tokens = await doArt.getTokensOfOwner(other.address);
       expect(tokens).to.have.length(0);
@@ -441,6 +452,36 @@ describe('DoArt Contract', function () {
       await expect(doArt.getTokenDetails(999)).to.be.revertedWith(
         'Token does not exist'
       );
+    });
+
+    it('Should handle batch minting up to limit', async function () {
+      const uris = new Array(50).fill(metadataURI);
+      const royalties = new Array(50).fill(royaltyBps);
+      await expect(doArt.connect(artist).batchMint(uris, royalties)).to.not.be
+        .reverted;
+      expect(await doArt.totalSupply()).to.equal(50);
+    });
+
+    it('Should support required interfaces', async function () {
+      expect(await doArt.supportsInterface('0x80ac58cd')).to.be.true; // IERC721
+      expect(await doArt.supportsInterface('0x5b5e139f')).to.be.true; // IERC721Metadata
+      expect(await doArt.supportsInterface('0x2a55205a')).to.be.true; // IERC2981
+      expect(await doArt.supportsInterface('0x7965db0b')).to.be.true; // IAccessControl
+    });
+  });
+
+  describe('Role Management', function () {
+    it('Should allow admin to grant and revoke roles', async function () {
+      await doArt
+        .connect(owner)
+        .grantRole(await doArt.ARTIST_ROLE(), other.address);
+      expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), other.address)).to
+        .be.true;
+      await doArt
+        .connect(owner)
+        .revokeRole(await doArt.ARTIST_ROLE(), other.address);
+      expect(await doArt.hasRole(await doArt.ARTIST_ROLE(), other.address)).to
+        .be.false;
     });
   });
 
@@ -481,12 +522,22 @@ describe('DoArt Contract', function () {
           })
       )
         .to.emit(doArt, 'TokenMinted')
-        .withArgs(other.address, 1, metadataURI);
+        .withArgs(other.address, 1, metadataURI)
+        .to.emit(escrowLazyMinting, 'LazyMintRedeemed')
+        .withArgs(
+          doArt.address,
+          voucher.tokenId,
+
+          other.address,
+          ethers.utils.parseEther('1'),
+          artist.address
+        );
 
       expect(await doArt.ownerOf(1)).to.equal(other.address);
       expect(await doArt.tokenURI(1)).to.equal(metadataURI);
-      expect(await escrowStorage.getVoucherRedeemed(doArt.address, 1)).to.be
-        .true;
+      expect(
+        await escrowStorage.getVoucherRedeemed(doArt.address, voucher.tokenId)
+      ).to.be.true;
     });
 
     it('Should revert if voucher is already redeemed', async function () {
@@ -564,8 +615,18 @@ describe('DoArt Contract', function () {
             params.auctionDuration
           )
       )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 1, artist.address, params.price);
+        .to.emit(escrowListings, 'NFTListed')
+        .withArgs(
+          doArt.address,
+          1,
+          artist.address,
+          params.buyer,
+          params.price,
+          params.minBid,
+          params.escrowAmount,
+          params.isAuction,
+          params.auctionDuration
+        );
 
       const listing = await escrowStorage.getListing(doArt.address, 1);
       expect(listing.isListed).to.be.true;
@@ -605,8 +666,18 @@ describe('DoArt Contract', function () {
             params.auctionDuration
           )
       )
-        .to.emit(escrowListings, 'Action')
-        .withArgs(doArt.address, 1, 1, artist.address, 0);
+        .to.emit(escrowListings, 'NFTListed')
+        .withArgs(
+          doArt.address,
+          1,
+          artist.address,
+          params.buyer,
+          params.price,
+          params.minBid,
+          params.escrowAmount,
+          params.isAuction,
+          params.auctionDuration
+        );
 
       const listing = await escrowStorage.getListing(doArt.address, 1);
       expect(listing.isListed).to.be.true;
@@ -616,6 +687,63 @@ describe('DoArt Contract', function () {
       const auction = await escrowStorage.getAuction(doArt.address, 1);
       expect(auction.isActive).to.be.true;
       expect(auction.minBid).to.equal(params.minBid);
+    });
+
+    it('Should batch list NFTs for sale and auction', async function () {
+      await doArt.connect(artist).mint(metadataURI, royaltyBps);
+      await doArt.connect(artist).mint('ipfs://QmTest456', royaltyBps);
+      await doArt
+        .connect(artist)
+        .setApprovalForAll(escrowListings.address, true);
+
+      const params = [
+        {
+          nftContract: doArt.address,
+          tokenId: 1,
+          buyer: ethers.constants.AddressZero,
+          price: ethers.utils.parseEther('1'),
+          minBid: 0,
+          escrowAmount: ethers.utils.parseEther('0.1'),
+          isAuction: false,
+          auctionDuration: 0
+        },
+        {
+          nftContract: doArt.address,
+          tokenId: 2,
+          buyer: ethers.constants.AddressZero,
+          price: 0,
+          minBid: ethers.utils.parseEther('0.5'),
+          escrowAmount: ethers.utils.parseEther('0.1'),
+          isAuction: true,
+          auctionDuration: 86400
+        }
+      ];
+
+      await expect(escrowListings.connect(artist).batchList(params))
+        .to.emit(escrowListings, 'NFTListed')
+        .withArgs(
+          doArt.address,
+          1,
+          artist.address,
+          params[0].buyer,
+          params[0].price,
+          params[0].minBid,
+          params[0].escrowAmount,
+          params[0].isAuction,
+          params[0].auctionDuration
+        )
+        .to.emit(escrowListings, 'NFTListed')
+        .withArgs(
+          doArt.address,
+          2,
+          artist.address,
+          params[1].buyer,
+          params[1].price,
+          params[1].minBid,
+          params[1].escrowAmount,
+          params[1].isAuction,
+          params[1].auctionDuration
+        );
     });
   });
 
@@ -654,10 +782,14 @@ describe('DoArt Contract', function () {
       await expect(
         escrowAuctions
           .connect(other)
-          .bid(doArt.address, 1, { value: bidAmount })
+          .batchPlaceAuctionBid(doArt.address, [1], [bidAmount], {
+            value: bidAmount
+          })
       )
         .to.emit(escrowStorage, 'BidChanged')
-        .withArgs(doArt.address, 1);
+        .withArgs(doArt.address, 1)
+        .to.emit(escrowAuctions, 'BidPlaced')
+        .withArgs(doArt.address, 1, other.address, bidAmount);
 
       const bids = await escrowStorage.getBids(doArt.address, 1);
       expect(bids).to.have.length(1);

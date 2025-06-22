@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -9,59 +10,85 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
-
-
-contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl{
+contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
     EscrowStorage public storageContract;
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-   
 
-    event Action(
+    // Emitted when a lazy mint voucher is redeemed
+    event LazyMintRedeemed(
         address indexed nftContract,
         uint256 indexed tokenId,
-        uint8 actionType,
-        address indexed user,
-        uint256 value
+        address indexed buyer,
+        uint256 price,
+        address creator
+    );
+
+    // Emitted when a royalty is paid
+    event RoyaltyPaid(
+        address indexed nftContract,
+        uint256 indexed tokenId,
+        address indexed recipient,
+        uint256 amount
+    );
+
+    // Emitted when a voucher is marked as redeemed
+    event VoucherRedeemed(
+        address indexed nftContract,
+        uint256 indexed tokenId,
+        bool redeemed
     );
 
     constructor(address _storageContract) {
         storageContract = EscrowStorage(_storageContract);
         _grantRole(PAUSER_ROLE, msg.sender);
     }
-    function pause()external onlyRole(PAUSER_ROLE){
-        _pause{};
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
     }
+
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
-        }
+    }
 
-   
-
-    function redeemLazyMint(address nftContract, EscrowStorage.LazyMintVoucher calldata voucher) external payable nonReentrant whenNotPaused {
+    function redeemLazyMint(address nftContract, EscrowStorage.LazyMintVoucher calldata voucher) 
+        external 
+        payable 
+        nonReentrant 
+        whenNotPaused 
+    {
         require(msg.value >= voucher.price, "Insufficient payment");
+        require(!storageContract.getVoucherRedeemed(nftContract, voucher.tokenId), "Voucher already redeemed");
         _verifyVoucher(voucher);
-        _checkTokenNotMinted(nftContract, voucher.tokenId);
         address buyer = msg.sender;
         _executePayments(nftContract, voucher.tokenId, voucher.price, voucher.creator);
         _mintLazy(nftContract, buyer, voucher);
-        emit Action(nftContract, voucher.tokenId, 10, buyer, voucher.price);
+        storageContract.setVoucherRedeemed(nftContract, voucher.tokenId, true);
+        emit VoucherRedeemed(nftContract, voucher.tokenId, true);
+        emit LazyMintRedeemed(nftContract, voucher.tokenId, buyer, voucher.price, voucher.creator);
     }
 
-    function verify(EscrowStorage.LazyMintVoucher calldata voucher, bytes calldata signature) public view returns (bool) {
+    function verify(EscrowStorage.LazyMintVoucher calldata voucher, bytes calldata signature) 
+        public 
+        view 
+        returns (bool) 
+    {
         bytes32 hash = _hashVoucher(voucher);
         address signer = ECDSA.recover(hash, signature);
         return signer == voucher.creator;
     }
-function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) internal {
-    
-    try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
-        require(tokenId == voucher.tokenId, "Minted token ID does not match voucher");
-    } catch Error(string memory reason) {
-        revert(string(abi.encodePacked("Minting failed: ", reason)));
-    } catch {
-        revert("Minting failed: Unknown error");
+
+    function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) 
+        internal 
+    {
+        try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
+           
+        } catch Error(string memory reason) {
+            revert(string(abi.encodePacked("Minting failed: ", reason)));
+        } catch {
+            revert("Minting failed: Unknown error");
+        }
     }
-}
 
     function _verifyVoucher(EscrowStorage.LazyMintVoucher calldata voucher) internal view {
         bytes32 hash = _hashVoucher(voucher);
@@ -80,16 +107,13 @@ function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher 
         uint256 creatorAmount = price - royaltyAmount;
         if (royaltyAmount > 0) {
             payable(royaltyRecipient).transfer(royaltyAmount);
-            emit Action(nftContract, tokenId, 2, royaltyRecipient, royaltyAmount);
+            emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
         }
         payable(creator).transfer(creatorAmount);
     }
 
     function _mintLazy(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) internal {
-        try this.mintFor(nftContract, to, voucher) {
-        } catch {
-            revert("Minting failed");
-        }
+        mintFor(nftContract, to, voucher);
     }
 
     function _hashVoucher(EscrowStorage.LazyMintVoucher calldata voucher) internal view returns (bytes32) {
