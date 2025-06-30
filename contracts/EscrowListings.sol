@@ -99,6 +99,10 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
+    function setEscrowAuctions(address _escrowAuctions) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_escrowAuctions != address(0), "Invalid address");
+    escrowAuctions = _escrowAuctions;
+}
 
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
@@ -409,4 +413,5 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
     function getBalance() public view returns (uint256) {
         return address(this).balance;
     }
+    
 }

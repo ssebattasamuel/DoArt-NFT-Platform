@@ -1,4 +1,5 @@
 require('@nomicfoundation/hardhat-toolbox');
+require('hardhat-gas-reporter');
 
 module.exports = {
   solidity: {
@@ -9,6 +10,11 @@ module.exports = {
         runs: 200
       }
     }
+  },
+  gasReporter: {
+    enabled: true,
+    currency: 'USD',
+    gasPrice: 20
   },
   networks: {
     hardhat: {

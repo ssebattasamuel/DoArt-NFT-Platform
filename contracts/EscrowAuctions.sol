@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -185,7 +184,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
         }));
 
         if (auction.endTime - block.timestamp < storageContract.ANTI_SNIPING_WINDOW()) {
-            uint256 newEndTime = auction.endTime + storageContract.ANTI_SNIPING_EXTENSION();
+            uint256 newEndTime = block.timestamp + storageContract.ANTI_SNIPING_EXTENSION();
             storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
                 endTime: newEndTime,
                 minBid: auction.minBid,
@@ -234,7 +233,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
         }
 
         payable(listing.seller).transfer(sellerAmount);
-        IERC721(nftContract).transferFrom(address(this), buyer, tokenId);
+        IEscrowListings(escrowListings).transferForAuction(nftContract, tokenId, buyer);
 
         if (listing.buyerDeposit > 0) {
             payable(listing.buyer).transfer(listing.buyerDeposit);
@@ -266,7 +265,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
         }));
 
         if (auction.highestBidder == address(0)) {
-            IERC721(nftContract).transferFrom(address(this), listing.seller, tokenId);
+            IEscrowListings(escrowListings).transferForAuction(nftContract, tokenId, listing.seller);
             storageContract.deleteListing(nftContract, tokenId);
             storageContract.deleteAuction(nftContract, tokenId);
             emit AuctionCanceled(nftContract, tokenId, msg.sender);
@@ -293,7 +292,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
             emit BidRefunded(nftContract, tokenId, auction.highestBidder, auction.highestBid);
         }
 
-        IERC721(nftContract).transferFrom(address(this), listing.seller, tokenId);
+        IEscrowListings(escrowListings).transferForAuction(nftContract, tokenId, listing.seller);
 
         storageContract.deleteListing(nftContract, tokenId);
         storageContract.deleteAuction(nftContract, tokenId);
@@ -317,7 +316,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
     function _finalizeAuction(address nftContract, uint256 tokenId, address seller, address highestBidder, uint256 highestBid) 
         internal 
     {
-        require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
+        require(IERC721(nftContract).ownerOf(tokenId) == escrowListings, "Token not in escrow");
         (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, highestBid);
         uint256 sellerAmount = highestBid - royaltyAmount;
 

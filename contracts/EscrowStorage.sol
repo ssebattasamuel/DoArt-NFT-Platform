@@ -87,6 +87,11 @@ contract EscrowStorage is AccessControl, Pausable {
         _unpause();
     }
 
+      function setDoArtContract(address _doArtContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_doArtContract != address(0), "Invalid address");
+    doArt = IDoArt(_doArtContract);
+}
+
     function getTotalNfts() external view returns (uint256) {
         return doArt.totalSupply();
     }
@@ -186,4 +191,5 @@ contract EscrowStorage is AccessControl, Pausable {
 
         return result;
     }
+  
 }
