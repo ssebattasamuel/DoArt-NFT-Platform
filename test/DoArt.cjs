@@ -239,26 +239,42 @@ describe('DoArt Contract', function () {
     });
   });
 
+
+
   describe('Minting for Escrow', function () {
-    it('Should allow minter to mint NFT for another address', async function () {
-      await expect(
-        doArt.connect(minter).mintFor(other.address, metadataURI, royaltyBps)
-      )
-        .to.emit(doArt, 'TokenMinted')
-        .withArgs(other.address, 1, metadataURI);
-
-      expect(await doArt.ownerOf(1)).to.equal(other.address);
-      expect(await doArt.tokenURI(1)).to.equal(metadataURI);
-      const [, royaltyAmount] = await doArt.royaltyInfo(1, 10000);
-      expect(royaltyAmount).to.equal(royaltyBps);
+  it('Should allow minter to mint NFT for another address', async function () {
+    console.log('Calling mintFor with args:', {
+      to: other.address,
+      metadataURI,
+      royaltyRecipient: artist.address,
+      royaltyBps
     });
+    const tx = await doArt.connect(minter).mintFor(other.address, metadataURI, artist.address, royaltyBps);
+    await expect(tx)
+      .to.emit(doArt, 'TokenMinted')
+      .withArgs(other.address, 1, metadataURI);
 
-    it('Should revert if non-minter tries to mintFor', async function () {
-      await expect(
-        doArt.connect(other).mintFor(other.address, metadataURI, royaltyBps)
-      ).to.be.revertedWith(/AccessControl: account .* is missing role/);
-    });
+    expect(await doArt.ownerOf(1)).to.equal(other.address);
+    expect(await doArt.tokenURI(1)).to.equal(metadataURI);
+    const [ownerAddr, uri, royaltyRecipient, bps] = await doArt.getTokenDetails(1);
+    expect(ownerAddr).to.equal(other.address);
+    expect(uri).to.equal(metadataURI);
+    expect(royaltyRecipient).to.equal(artist.address);
+    expect(bps).to.equal(royaltyBps);
   });
+
+  it('Should revert if non-minter tries to mintFor', async function () {
+    console.log('Calling mintFor with non-minter, args:', {
+      to: other.address,
+      metadataURI,
+      royaltyRecipient: artist.address,
+      royaltyBps
+    });
+    await expect(
+      doArt.connect(other).mintFor(other.address, metadataURI, artist.address, royaltyBps)
+    ).to.be.revertedWith(/AccessControl: account .* is missing role/);
+  });
+});
 
   describe('Batch Minting', function () {
     it('Should allow artist to batch mint NFTs', async function () {
@@ -527,7 +543,6 @@ describe('DoArt Contract', function () {
         .withArgs(
           doArt.address,
           voucher.tokenId,
-
           other.address,
           ethers.utils.parseEther('1'),
           artist.address
@@ -744,6 +759,16 @@ describe('DoArt Contract', function () {
           params[1].isAuction,
           params[1].auctionDuration
         );
+
+      const listing1 = await escrowStorage.getListing(doArt.address, 1);
+      expect(listing1.isListed).to.be.true;
+      expect(listing1.isAuction).to.be.false;
+      expect(listing1.price).to.equal(params[0].price);
+
+      const listing2 = await escrowStorage.getListing(doArt.address, 2);
+      expect(listing2.isListed).to.be.true;
+      expect(listing2.isAuction).to.be.true;
+      expect(listing2.minBid).to.equal(params[1].minBid);
     });
   });
 
@@ -788,6 +813,8 @@ describe('DoArt Contract', function () {
       )
         .to.emit(escrowStorage, 'BidChanged')
         .withArgs(doArt.address, 1)
+        .to.emit(escrowAuctions, 'BatchBidPlaced')
+        .withArgs(doArt.address, [1], other.address, [bidAmount])
         .to.emit(escrowAuctions, 'BidPlaced')
         .withArgs(doArt.address, 1, other.address, bidAmount);
 

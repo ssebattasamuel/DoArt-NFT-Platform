@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -9,7 +8,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "./DoArt.sol";
 
 interface IDoArt {
-    function mintFor(address to, string memory metadataURI, uint96 royaltyBps) external returns (uint256);
+    function mintFor(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps) external returns (uint256);
     function totalSupply() external view returns (uint256);
 }
 
@@ -76,7 +75,6 @@ contract EscrowStorage is AccessControl, Pausable {
         _grantRole(ADMIN_ROLE, msg.sender);
         doArt = IDoArt(_doArtContract);
         _grantRole(PAUSER_ROLE, msg.sender);
-        
     }
     
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -87,10 +85,10 @@ contract EscrowStorage is AccessControl, Pausable {
         _unpause();
     }
 
-      function setDoArtContract(address _doArtContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_doArtContract != address(0), "Invalid address");
-    doArt = IDoArt(_doArtContract);
-}
+    function setDoArtContract(address _doArtContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_doArtContract != address(0), "Invalid address");
+        doArt = IDoArt(_doArtContract);
+    }
 
     function getTotalNfts() external view returns (uint256) {
         return doArt.totalSupply();
@@ -110,7 +108,6 @@ contract EscrowStorage is AccessControl, Pausable {
             }
         }
 
-        // Resize array to fit actual number of listings
         Listing[] memory result = new Listing[](count);
         for (uint256 i = 0; i < count; i++) {
             result[i] = allListings[i];
@@ -121,7 +118,7 @@ contract EscrowStorage is AccessControl, Pausable {
 
     function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
         Listing memory listing = listings[nftContract][tokenId];
-        listing.tokenId = tokenId; // Set the tokenId in the returned struct
+        listing.tokenId = tokenId;
         return listing;
     }
 
@@ -191,5 +188,4 @@ contract EscrowStorage is AccessControl, Pausable {
 
         return result;
     }
-  
 }

@@ -29,6 +29,7 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
     event TokenMinted(address indexed owner, uint256 indexed tokenId, string metadataURI);
     event TokenBurned(uint256 indexed tokenId);
     event ArtistMetadataUpdated(address indexed artist, string name, string bio, string portfolioUrl);
+    event DebugRoyaltySet(uint256 indexed tokenId, address recipient, uint96 royaltyBps);
 
     constructor(address _storageContract) ERC721("DoArt", "DA") {
         storageContract = EscrowStorage(_storageContract);
@@ -38,7 +39,6 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         _grantRole(MINTER_ROLE, msg.sender);
     }
 
-    // Add function to update storageContract
     function setStorageContract(address _storageContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_storageContract != address(0), "Invalid address");
         storageContract = EscrowStorage(_storageContract);
@@ -74,25 +74,25 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         whenNotPaused
         returns (uint256)
     {
-        return _mintWithRoyalty(msg.sender, metadataURI, royaltyBps);
+        return _mintWithRoyalty(msg.sender, metadataURI, msg.sender, royaltyBps);
     }
 
-    function mintFor(address to, string memory metadataURI, uint96 royaltyBps)
+    function mintFor(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps)
         public
         onlyRole(MINTER_ROLE)
         whenNotPaused
         returns (uint256)
     {
-        return _mintWithRoyalty(to, metadataURI, royaltyBps);
+        return _mintWithRoyalty(to, metadataURI, royaltyRecipient, royaltyBps);
     }
 
-    function _mintWithRoyalty(address to, string memory metadataURI, uint96 royaltyBps)
+    function _mintWithRoyalty(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps)
         internal
         returns (uint256)
     {
         _validateMintInputs(metadataURI, royaltyBps);
         uint256 newItemId = _createToken(to);
-        _setTokenMetadata(newItemId, metadataURI, to, royaltyBps);
+        _setTokenMetadata(newItemId, metadataURI, royaltyRecipient, royaltyBps);
         emit TokenMinted(to, newItemId, metadataURI);
         return newItemId;
     }
@@ -109,7 +109,7 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
 
         uint256[] memory tokenIds = new uint256[](metadataURIs.length);
         for (uint256 i = 0; i < metadataURIs.length; i++) {
-            tokenIds[i] = _mintSingle(msg.sender, metadataURIs[i], royaltyBps[i]);
+            tokenIds[i] = _mintSingle(msg.sender, metadataURIs[i], msg.sender, royaltyBps[i]);
         }
         return tokenIds;
     }
@@ -169,6 +169,15 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         require(_exists(tokenId), "Token does not exist");
         require(royaltyBps <= 10000, "Royalty must be <= 100%");
         _setTokenRoyalty(tokenId, recipient, royaltyBps);
+        emit DebugRoyaltySet(tokenId, recipient, royaltyBps);
+    }
+
+    function debugRoyaltyInfo(uint256 tokenId, uint256 salePrice)
+        external
+        view
+        returns (address recipient, uint256 amount)
+    {
+        return royaltyInfo(tokenId, salePrice);
     }
 
     function _validateMintInputs(string memory uri, uint96 royaltyBps) internal pure {
@@ -187,13 +196,16 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
 
     function _setTokenMetadata(uint256 tokenId, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps) internal {
         _setTokenURI(tokenId, metadataURI);
-        _setTokenRoyalty(tokenId, royaltyRecipient, royaltyBps);
+        if (royaltyBps > 0) {
+            _setTokenRoyalty(tokenId, royaltyRecipient, royaltyBps);
+            emit DebugRoyaltySet(tokenId, royaltyRecipient, royaltyBps);
+        }
     }
 
-    function _mintSingle(address to, string memory metadataURI, uint96 royaltyBps) internal returns (uint256) {
+    function _mintSingle(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps) internal returns (uint256) {
         _validateMintInputs(metadataURI, royaltyBps);
         uint256 newItemId = _createToken(to);
-        _setTokenMetadata(newItemId, metadataURI, to, royaltyBps);
+        _setTokenMetadata(newItemId, metadataURI, royaltyRecipient, royaltyBps);
         emit TokenMinted(to, newItemId, metadataURI);
         return newItemId;
     }

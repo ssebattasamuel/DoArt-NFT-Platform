@@ -1,8 +1,10 @@
+
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
 import "./EscrowStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -13,7 +15,7 @@ interface IEscrowListings {
     function transferForAuction(address nftContract, uint256 tokenId, address to) external;
 }
 
-contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
+contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IERC721Receiver {
     EscrowStorage public storageContract;
     address public escrowListings;
 
@@ -74,10 +76,23 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
         uint256 amount
     );
 
+    // Debug event for timestamp verification
+    event DebugTimestamp(uint256 blockTimestamp, uint256 auctionEndTime, uint256 antiSnipingWindow, bool isWithinWindow);
+
     constructor(address _storageContract, address _escrowListings) Ownable() {
         storageContract = EscrowStorage(_storageContract);
         escrowListings = _escrowListings;
         _grantRole(PAUSER_ROLE, msg.sender);
+    }
+
+    // Implement IERC721Receiver
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external override returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -174,15 +189,10 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
         }
 
         storageContract.pushBid(nftContract, tokenId, EscrowStorage.Bid({bidder: msg.sender, amount: amount}));
-        storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
-            endTime: auction.endTime,
-            minBid: auction.minBid,
-            minIncrement: auction.minIncrement,
-            highestBidder: msg.sender,
-            highestBid: amount,
-            isActive: auction.isActive
-        }));
-
+        
+        // bool isWithinWindow = auction.endTime - block.timestamp < storageContract.ANTI_SNIPING_WINDOW();
+        // emit DebugTimestamp(block.timestamp, auction.endTime, storageContract.ANTI_SNIPING_WINDOW(), isWithinWindow);
+        
         if (auction.endTime - block.timestamp < storageContract.ANTI_SNIPING_WINDOW()) {
             uint256 newEndTime = block.timestamp + storageContract.ANTI_SNIPING_EXTENSION();
             storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
@@ -194,6 +204,15 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl {
                 isActive: auction.isActive
             }));
             emit AuctionExtended(nftContract, tokenId, newEndTime);
+        } else {
+            storageContract.setAuction(nftContract, tokenId, EscrowStorage.Auction({
+                endTime: auction.endTime,
+                minBid: auction.minBid,
+                minIncrement: auction.minIncrement,
+                highestBidder: msg.sender,
+                highestBid: amount,
+                isActive: auction.isActive
+            }));
         }
 
         emit BidPlaced(nftContract, tokenId, msg.sender, amount);

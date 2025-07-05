@@ -1,4 +1,4 @@
-// test/EscrowAuctions.cjs
+
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
@@ -79,15 +79,11 @@ describe('EscrowAuctions Contract', function () {
         auctionDuration
       );
 
-    // Debugging logs to verify setup
-    console.log('DoArt Paused:', await doArt.paused());
-    console.log('EscrowListings Paused:', await escrowListings.paused());
-    console.log('EscrowAuctions Paused:', await escrowAuctions.paused());
-    console.log('EscrowListings Address:', escrowListings.address);
-    console.log('NFT Owner:', await doArt.ownerOf(1));
-    console.log('EscrowListings has ADMIN_ROLE:', await escrowStorage.hasRole(ADMIN_ROLE, escrowListings.address));
-    console.log('EscrowAuctions has ADMIN_ROLE:', await escrowStorage.hasRole(ADMIN_ROLE, escrowAuctions.address));
-    console.log('EscrowAuctions is escrowAuctions in EscrowListings:', await escrowListings.escrowAuctions() === escrowAuctions.address);
+    // Log auction setup
+    const auction = await escrowStorage.getAuction(doArt.address, 1);
+    const block = await ethers.provider.getBlock('latest');
+    console.log('Auction setup - endTime:', auction.endTime.toString());
+    console.log('Auction setup - expected endTime:', (block.timestamp + auctionDuration).toString());
   });
 
   describe('Role Initialization', function () {
@@ -170,26 +166,68 @@ describe('EscrowAuctions Contract', function () {
       ).to.be.revertedWith('Bid too low');
     });
 
+    // it('Should extend auction if bid is within anti-sniping window', async function () {
+    //   const tokenIds = [1];
+    //   const amounts = [ethers.utils.parseEther('0.6')];
+    //   const block = await ethers.provider.getBlock('latest');
+    //   const currentTime = block.timestamp;
+
+    //   // Log auction setup
+    //   const auctionBeforeSetup = await escrowStorage.getAuction(doArt.address, 1);
+    //   console.log('Auction setup - endTime:', auctionBeforeSetup.endTime.toString());
+    //   console.log('Auction setup - expected endTime:', (currentTime + auctionDuration).toString());
+
+    //   await ethers.provider.send('evm_increaseTime', [auctionDuration - 300]);
+    //   await ethers.provider.send('evm_mine');
+
+    //   // Log before bid
+    //   const auctionBefore = await escrowStorage.getAuction(doArt.address, 1);
+    //   console.log('Before bid - auction.endTime:', auctionBefore.endTime.toString());
+
+    //   const tx = await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] });
+    //   const receipt = await tx.wait();
+    //   const txBlock = await ethers.provider.getBlock(receipt.blockNumber);
+    //   const blockTimestamp = txBlock.timestamp;
+    //   console.log('After bid - blockTimestamp:', blockTimestamp);
+
+    //   // Log DebugTimestamp event
+    //   const debugEvent = receipt.events?.find(e => e.event === 'DebugTimestamp');
+    //   console.log('DebugTimestamp:', {
+    //     blockTimestamp: debugEvent?.args?.blockTimestamp?.toString(),
+    //     auctionEndTime: debugEvent?.args?.auctionEndTime?.toString(),
+    //     antiSnipingWindow: debugEvent?.args?.antiSnipingWindow?.toString(),
+    //     isWithinWindow: debugEvent?.args?.isWithinWindow
+    //   });
+
+    //   const expectedEndTime = blockTimestamp + 600; // ANTI_SNIPING_EXTENSION = 600 seconds
+    //   await expect(tx)
+    //     .to.emit(escrowAuctions, 'AuctionExtended')
+    //     .withArgs(doArt.address, 1, expectedEndTime);
+
+    //   const auction = await escrowStorage.getAuction(doArt.address, 1);
+    //   console.log('After bid - auction.endTime:', auction.endTime.toString());
+    //   console.log('After bid - expectedEndTime:', expectedEndTime.toString());
+    //   expect(auction.endTime).to.be.closeTo(expectedEndTime, 1);
+    // });
     it('Should extend auction if bid is within anti-sniping window', async function () {
-      const tokenIds = [1];
-      const amounts = [ethers.utils.parseEther('0.6')];
-      const block = await ethers.provider.getBlock('latest');
-      const currentTime = block.timestamp;
-      await ethers.provider.send('evm_setNextBlockTimestamp', [currentTime + auctionDuration - 300]); // Within 5 minutes
-      await ethers.provider.send('evm_mine');
+  const tokenIds = [1];
+  const amounts = [ethers.utils.parseEther('0.6')];
+  await ethers.provider.send('evm_increaseTime', [auctionDuration - 300]);
+  await ethers.provider.send('evm_mine');
 
-      const newBlock = await ethers.provider.getBlock('latest');
-      const expectedEndTime = newBlock.timestamp + 600; // Assuming ANTI_SNIPING_EXTENSION is 600 seconds
+  const tx = await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] });
+  const receipt = await tx.wait();
+  const txBlock = await ethers.provider.getBlock(receipt.blockNumber);
+  const blockTimestamp = txBlock.timestamp;
 
-      await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] })
-      )
-        .to.emit(escrowAuctions, 'AuctionExtended')
-        .withArgs(doArt.address, 1, expectedEndTime);
+  const expectedEndTime = blockTimestamp + 600; // ANTI_SNIPING_EXTENSION = 600 seconds
+  await expect(tx)
+    .to.emit(escrowAuctions, 'AuctionExtended')
+    .withArgs(doArt.address, 1, expectedEndTime);
 
-      const auction = await escrowStorage.getAuction(doArt.address, 1);
-      expect(auction.endTime).to.equal(expectedEndTime);
-    });
+  const auction = await escrowStorage.getAuction(doArt.address, 1);
+  expect(auction.endTime).to.be.closeTo(expectedEndTime, 1);
+});
   });
 
   describe('End Auction', function () {

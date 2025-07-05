@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -14,7 +13,6 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
     EscrowStorage public storageContract;
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    // Emitted when a lazy mint voucher is redeemed
     event LazyMintRedeemed(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -23,7 +21,6 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         address creator
     );
 
-    // Emitted when a royalty is paid
     event RoyaltyPaid(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -31,11 +28,17 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         uint256 amount
     );
 
-    // Emitted when a voucher is marked as redeemed
     event VoucherRedeemed(
         address indexed nftContract,
         uint256 indexed tokenId,
         bool redeemed
+    );
+
+    event RoyaltyCalculated(
+        address indexed nftContract,
+        uint256 indexed tokenId,
+        address recipient,
+        uint256 amount
     );
 
     constructor(address _storageContract) {
@@ -61,11 +64,17 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         require(!storageContract.getVoucherRedeemed(nftContract, voucher.tokenId), "Voucher already redeemed");
         _verifyVoucher(voucher);
         address buyer = msg.sender;
-        _executePayments(nftContract, voucher.tokenId, voucher.price, voucher.creator);
+        _checkTokenNotMinted(nftContract, voucher.tokenId);
         _mintLazy(nftContract, buyer, voucher);
+        _executePayments(nftContract, voucher.tokenId, voucher.price, voucher.creator);
         storageContract.setVoucherRedeemed(nftContract, voucher.tokenId, true);
         emit VoucherRedeemed(nftContract, voucher.tokenId, true);
         emit LazyMintRedeemed(nftContract, voucher.tokenId, buyer, voucher.price, voucher.creator);
+        if (msg.value > voucher.price) {
+            uint256 refundAmount = msg.value - voucher.price;
+            (bool refundSuccess, ) = payable(buyer).call{value: refundAmount}("");
+            require(refundSuccess, "Refund failed");
+        }
     }
 
     function verify(EscrowStorage.LazyMintVoucher calldata voucher, bytes calldata signature) 
@@ -81,8 +90,8 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
     function mintFor(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) 
         internal 
     {
-        try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.royaltyBps) returns (uint256 tokenId) {
-           
+        try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.creator, voucher.royaltyBps) {
+            // Token minted successfully
         } catch Error(string memory reason) {
             revert(string(abi.encodePacked("Minting failed: ", reason)));
         } catch {
@@ -104,12 +113,15 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
 
     function _executePayments(address nftContract, uint256 tokenId, uint256 price, address creator) internal {
         (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, price);
+        emit RoyaltyCalculated(nftContract, tokenId, royaltyRecipient, royaltyAmount);
         uint256 creatorAmount = price - royaltyAmount;
         if (royaltyAmount > 0) {
-            payable(royaltyRecipient).transfer(royaltyAmount);
+            (bool royaltySuccess, ) = payable(royaltyRecipient).call{value: royaltyAmount}("");
+            require(royaltySuccess, "Royalty payment failed");
             emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
         }
-        payable(creator).transfer(creatorAmount);
+        (bool creatorSuccess, ) = payable(creator).call{value: creatorAmount}("");
+        require(creatorSuccess, "Creator payment failed");
     }
 
     function _mintLazy(address nftContract, address to, EscrowStorage.LazyMintVoucher calldata voucher) internal {
