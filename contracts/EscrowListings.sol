@@ -154,6 +154,7 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
             IERC721(nftContract).approve(escrowAuctions, tokenId);
             _createAuction(nftContract, tokenId, minBid, auctionDuration);
         }
+        
         emit NFTListed(
             nftContract,
             tokenId,
@@ -181,6 +182,7 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
                 IERC721(params[i].nftContract).approve(escrowAuctions, params[i].tokenId);
                 _createAuction(params[i].nftContract, params[i].tokenId, params[i].minBid, params[i].auctionDuration);
             }
+           
             emit NFTListed(
                 params[i].nftContract,
                 params[i].tokenId,
@@ -347,11 +349,18 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         emit ViewingPeriodExtended(nftContract, tokenId, msg.sender, newListing.viewingPeriodEnd);
     }
 
+    // function transferForAuction(address nftContract, uint256 tokenId, address to) external whenNotPaused {
+    //     require(msg.sender == escrowAuctions, "Only EscrowAuctions");
+    //     require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
+        
+    //     IERC721(nftContract).transferFrom(address(this), to, tokenId);
+    // }
     function transferForAuction(address nftContract, uint256 tokenId, address to) external whenNotPaused {
-        require(msg.sender == escrowAuctions, "Only EscrowAuctions");
-        require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
-        IERC721(nftContract).transferFrom(address(this), to, tokenId);
-    }
+    require(msg.sender == escrowAuctions, "Only EscrowAuctions");
+    require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
+    
+    IERC721(nftContract).safeTransferFrom(address(this), to, tokenId);
+}
 
     function _calculateRoyalty(address nftContract, uint256 tokenId, uint256 salePrice)
         internal
