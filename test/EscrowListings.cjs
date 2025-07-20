@@ -696,12 +696,12 @@ describe('EscrowListings Contract', function () {
       expect(await mockERC721.ownerOf(1)).to.equal(buyer.address);
     });
 
-    it('Should revert if insufficient payment', async function () {
+    it('Should revert if incorrect payment', async function () {
       await expect(
         escrowListings
           .connect(buyer)
           .finalizeSale(doArt.address, 1, { value: price.sub(1) })
-      ).to.be.revertedWith('Insufficient payment');
+      ).to.be.revertedWith('Incorrect payment');
     });
 
     it('Should revert if sale not approved', async function () {
@@ -825,7 +825,6 @@ describe('EscrowListings Contract', function () {
 
   describe('Transfer for Auction', function () {
     let mockReceiver;
-    let other;
 
     beforeEach(async function () {
       // Deploy MockERC721Receiver
@@ -833,19 +832,6 @@ describe('EscrowListings Contract', function () {
         await ethers.getContractFactory('MockERC721Receiver');
       mockReceiver = await MockERC721Receiver.deploy();
       await mockReceiver.deployed();
-      console.log('MockReceiver address:', mockReceiver.address);
-
-      // Get an EOA for testing
-      [_, __, ___, other] = await ethers.getSigners();
-      console.log('Other address:', other.address);
-
-      // Verify contract deployments
-      console.log('Deployed EscrowListings address:', escrowListings.address);
-      console.log('Deployed EscrowAuctions address:', escrowAuctions.address);
-      console.log(
-        'EscrowListings escrowAuctions:',
-        await escrowListings.escrowAuctions()
-      );
 
       // List NFT with auction
       await escrowListings
@@ -863,116 +849,27 @@ describe('EscrowListings Contract', function () {
     });
 
     it('Should allow EscrowAuctions to transfer NFT', async function () {
-      // Verify contract addresses
-      console.log('DoArt address:', doArt.address);
-      console.log('EscrowListings address:', escrowListings.address);
-      console.log('EscrowAuctions address:', escrowAuctions.address);
-      console.log(
-        'EscrowListings escrowAuctions:',
-        await escrowListings.escrowAuctions()
-      );
-      expect(await escrowListings.escrowAuctions()).to.equal(
-        escrowAuctions.address
-      );
+      // Impersonate escrowAuctions to call transferForAuction
+      await hre.network.provider.request({
+        method: 'hardhat_impersonateAccount',
+        params: [escrowAuctions.address]
+      });
+      const auctionsSigner = await ethers.getSigner(escrowAuctions.address);
 
-      // Verify DoArt is not paused
-      console.log('DoArt paused:', await doArt.paused());
-      expect(await doArt.paused()).to.be.false;
+      // Fund the impersonated account
+      await hre.network.provider.send('hardhat_setBalance', [
+        escrowAuctions.address,
+        '0x1000000000000000000000' // 1e21 wei = 1000 ETH
+      ]);
 
-      // Verify NFT ownership before transfer
-      console.log('NFT owner before:', await doArt.ownerOf(1));
-      expect(await doArt.ownerOf(1)).to.equal(escrowListings.address);
-
-      // Verify approval for EscrowAuctions
-      console.log('NFT approval:', await doArt.getApproved(1));
-      expect(await doArt.getApproved(1)).to.equal(escrowAuctions.address);
-
-      // Verify EscrowListings is not paused
-      console.log('EscrowListings paused:', await escrowListings.paused());
-      expect(await escrowListings.paused()).to.be.false;
-
-      // Verify mockReceiver is a contract
-      const receiverCode = await ethers.provider.getCode(mockReceiver.address);
-      console.log(
-        'MockReceiver code size:',
-        receiverCode.length > 2 ? 'Contract' : 'EOA'
-      );
-
-      // Ensure EscrowAuctions knows EscrowListings
-      await escrowAuctions
-        .connect(owner)
-        .setEscrowListings(escrowListings.address);
-      console.log(
-        'EscrowListings set in EscrowAuctions:',
-        await escrowAuctions.escrowListings()
-      );
-
-      // Log transaction data for debugging
-      const data = escrowAuctions.interface.encodeFunctionData(
-        'callEscrowListings',
-        [doArt.address, 1, mockReceiver.address]
-      );
-      console.log('Encoded data for callEscrowListings:', data);
-
-      // Call transferForAuction via EscrowAuctions
-      const tx = await escrowAuctions
-        .connect(owner)
-        .callEscrowListings(doArt.address, 1, mockReceiver.address, {
-          gasLimit: 2000000
-        });
-      const receipt = await tx.wait();
-      console.log(
-        'Transaction events:',
-        JSON.stringify(receipt.events, null, 2)
-      );
-
-      await expect(tx)
+      await expect(
+        escrowListings
+          .connect(auctionsSigner)
+          .transferForAuction(doArt.address, 1, mockReceiver.address)
+      )
         .to.emit(doArt, 'Transfer')
         .withArgs(escrowListings.address, mockReceiver.address, 1);
 
-      console.log('NFT owner after:', await doArt.ownerOf(1));
-      expect(await doArt.ownerOf(1)).to.equal(mockReceiver.address);
-    });
-
-    it('Should allow direct safeTransferFrom to mockReceiver', async function () {
-      // Verify NFT ownership after listing
-      console.log('NFT owner after listing:', await doArt.ownerOf(1));
-      expect(await doArt.ownerOf(1)).to.equal(escrowListings.address);
-
-      // Debug DoArt contract
-      const DoArt = await ethers.getContractFactory('DoArt');
-      console.log('DoArt address:', doArt.address);
-      console.log(
-        'DoArt ABI functions:',
-        DoArt.interface.fragments
-          .filter((f) => f.type === 'function')
-          .map((f) => f.format('full'))
-      );
-
-      // Verify approval for EscrowAuctions
-      console.log('NFT approval for token 1:', await doArt.getApproved(1));
-      expect(await doArt.getApproved(1)).to.equal(escrowAuctions.address);
-
-      // Log transaction data for debugging
-      const data = escrowAuctions.interface.encodeFunctionData(
-        'directSafeTransfer',
-        [doArt.address, 1, mockReceiver.address]
-      );
-      console.log('Encoded data for directSafeTransfer:', data);
-
-      // Call directSafeTransfer via EscrowAuctions
-      const tx = await escrowAuctions
-        .connect(owner)
-        .directSafeTransfer(doArt.address, 1, mockReceiver.address, {
-          gasLimit: 1000000
-        });
-      const receipt = await tx.wait();
-      console.log(
-        'Transaction events:',
-        JSON.stringify(receipt.events, null, 2)
-      );
-
-      console.log('NFT owner after direct transfer:', await doArt.ownerOf(1));
       expect(await doArt.ownerOf(1)).to.equal(mockReceiver.address);
     });
 

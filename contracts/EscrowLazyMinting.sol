@@ -9,6 +9,10 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+/**
+ * @title EscrowLazyMinting Contract
+ * @dev Handles lazy minting of NFTs using vouchers.
+ */
 contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
     EscrowStorage public storageContract;
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -20,20 +24,17 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         uint256 price,
         address creator
     );
-
     event RoyaltyPaid(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed recipient,
         uint256 amount
     );
-
     event VoucherRedeemed(
         address indexed nftContract,
         uint256 indexed tokenId,
         bool redeemed
     );
-
     event RoyaltyCalculated(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -41,6 +42,10 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         uint256 amount
     );
 
+    /**
+     * @dev Constructor.
+     * @param _storageContract Storage address.
+     */
     constructor(address _storageContract) {
         storageContract = EscrowStorage(_storageContract);
         _grantRole(PAUSER_ROLE, msg.sender);
@@ -54,6 +59,11 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         _unpause();
     }
 
+    /**
+     * @dev Redeems a lazy mint voucher.
+     * @param nftContract NFT contract.
+     * @param voucher The lazy mint voucher.
+     */
     function redeemLazyMint(address nftContract, EscrowStorage.LazyMintVoucher calldata voucher) 
         external 
         payable 
@@ -72,11 +82,16 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         emit LazyMintRedeemed(nftContract, voucher.tokenId, buyer, voucher.price, voucher.creator);
         if (msg.value > voucher.price) {
             uint256 refundAmount = msg.value - voucher.price;
-            (bool refundSuccess, ) = payable(buyer).call{value: refundAmount}("");
-            require(refundSuccess, "Refund failed");
+            _transferETH(buyer, refundAmount);
         }
     }
 
+    /**
+     * @dev Verifies a voucher signature.
+     * @param voucher Voucher to verify.
+     * @param signature Signature.
+     * @return True if valid.
+     */
     function verify(EscrowStorage.LazyMintVoucher calldata voucher, bytes calldata signature) 
         public 
         view 
@@ -91,7 +106,6 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
         internal 
     {
         try IDoArt(nftContract).mintFor(to, voucher.uri, voucher.creator, voucher.royaltyBps) {
-            // Token minted successfully
         } catch Error(string memory reason) {
             revert(string(abi.encodePacked("Minting failed: ", reason)));
         } catch {
@@ -162,5 +176,14 @@ contract EscrowLazyMinting is ReentrancyGuard, Pausable, AccessControl {
             recipient = receiver;
             amount = royalty;
         } catch {}
+    }
+
+    /** @dev Internal ETH transfer.
+     * @param to Recipient.
+     * @param amount Amount.
+     */
+    function _transferETH(address to, uint256 amount) internal {
+        (bool success, ) = payable(to).call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 }

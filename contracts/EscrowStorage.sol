@@ -8,14 +8,19 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "./DoArt.sol";
 
 interface IDoArt {
-    function mintFor(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps) external returns (uint256);
+    function mintFor(address to, string memory, address, uint96) external returns (uint256);
     function totalSupply() external view returns (uint256);
 }
 
+/**
+ * @title EscrowStorage Contract
+ * @dev Centralized storage for listings, auctions, bids, vouchers.
+ * Note: Grant ADMIN_ROLE to EscrowListings, EscrowAuctions, EscrowLazyMinting after deployment.
+ */
 contract EscrowStorage is AccessControl, Pausable {
-    uint256 public constant DEFAULT_VIEWING_PERIOD = 3 days;
-    uint256 public constant ANTI_SNIPING_EXTENSION = 10 minutes;
-    uint256 public constant ANTI_SNIPING_WINDOW = 5 minutes;
+    uint256 public immutable DEFAULT_VIEWING_PERIOD = 3 days;
+    uint256 public immutable ANTI_SNIPING_EXTENSION = 10 minutes;
+    uint256 public immutable ANTI_SNIPING_WINDOW = 5 minutes;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -47,7 +52,7 @@ contract EscrowStorage is AccessControl, Pausable {
         bool isApproved;
         address saleApprover;
         bool isAuction;
-        uint256 tokenId; 
+        uint256 tokenId;
     }
 
     struct LazyMintVoucher {
@@ -64,19 +69,24 @@ contract EscrowStorage is AccessControl, Pausable {
     mapping(address => mapping(uint256 => Auction)) public auctions;
     mapping(address => mapping(uint256 => bool)) public voucherRedeemed;
 
-    IDoArt public doArt;
+    IDoArt public immutable doArt;
 
     event ListingChanged(address indexed nftContract, uint256 indexed tokenId);
     event BidChanged(address indexed nftContract, uint256 indexed tokenId);
     event AuctionChanged(address indexed nftContract, uint256 indexed tokenId);
 
+    /**
+     * @dev Constructor.
+     * @param _doArtContract DoArt address.
+     */
     constructor(address _doArtContract) {
+        require(_doArtContract != address(0), "Invalid address");
+        doArt = IDoArt(_doArtContract);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
-        doArt = IDoArt(_doArtContract);
         _grantRole(PAUSER_ROLE, msg.sender);
     }
-    
+
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
     }
@@ -85,16 +95,24 @@ contract EscrowStorage is AccessControl, Pausable {
         _unpause();
     }
 
-    function setDoArtContract(address _doArtContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+   function setDoArtContract(address _doArtContract) external view onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_doArtContract != address(0), "Invalid address");
-        doArt = IDoArt(_doArtContract);
+        // doArt is immutable, can't set after init. Remove if not needed.
     }
 
-    function getTotalNfts() external view returns (uint256) {
+    /**
+     * @dev Gets total NFTs from DoArt.
+     * @return Total.
+     */
+    function getTotalNfts() public view returns (uint256) {
         return doArt.totalSupply();
     }
 
-    function getListings() external view returns (Listing[] memory) {
+    /**
+     * @dev Gets all active listings.
+     * @return Array of listings.
+     */
+    function getAllListings() public view returns (Listing[] memory) {
         uint256 totalTokens = doArt.totalSupply();
         Listing[] memory allListings = new Listing[](totalTokens);
         uint256 count = 0;
@@ -102,7 +120,7 @@ contract EscrowStorage is AccessControl, Pausable {
         for (uint256 tokenId = 1; tokenId <= totalTokens; tokenId++) {
             Listing memory listing = listings[address(doArt)][tokenId];
             if (listing.isListed) {
-                listing.tokenId = tokenId; 
+                listing.tokenId = tokenId;
                 allListings[count] = listing;
                 count++;
             }
@@ -116,7 +134,7 @@ contract EscrowStorage is AccessControl, Pausable {
         return result;
     }
 
-    function getListing(address nftContract, uint256 tokenId) external view returns (Listing memory) {
+    function getListing(address nftContract, uint256 tokenId) public view returns (Listing memory) {
         Listing memory listing = listings[nftContract][tokenId];
         listing.tokenId = tokenId;
         return listing;
@@ -167,8 +185,12 @@ contract EscrowStorage is AccessControl, Pausable {
     function setVoucherRedeemed(address nftContract, uint256 tokenId, bool redeemed) external onlyRole(ADMIN_ROLE) {
         voucherRedeemed[nftContract][tokenId] = redeemed;
     }
-   
-    function getAuctions() external view returns (Auction[] memory) {
+
+    /**
+     * @dev Gets all active auctions.
+     * @return Array of auctions.
+     */
+    function getAllAuctions() public view returns (Auction[] memory) {
         uint256 totalTokens = doArt.totalSupply();
         Auction[] memory allAuctions = new Auction[](totalTokens);
         uint256 count = 0;

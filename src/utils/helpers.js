@@ -1,4 +1,3 @@
-// src/utils/helpers.js
 import { formatDistance, parseISO } from 'date-fns';
 import { differenceInDays } from 'date-fns';
 
@@ -7,7 +6,7 @@ export const subtractDates = (dateStr1, dateStr2) =>
 
 export const formatDistanceFromNow = (dateStr) =>
   formatDistance(parseISO(dateStr), new Date(), {
-    addSuffix: true,
+    addSuffix: true
   })
     .replace('about ', '')
     .replace('in', 'In');

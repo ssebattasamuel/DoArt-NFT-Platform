@@ -9,6 +9,10 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "./EscrowStorage.sol";
 
+/**
+ * @title DoArt NFT Contract
+ * @dev ERC721 contract for minting and managing digital art NFTs with royalties and artist metadata.
+ */
 contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
@@ -31,6 +35,10 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
     event ArtistMetadataUpdated(address indexed artist, string name, string bio, string portfolioUrl);
     event DebugRoyaltySet(uint256 indexed tokenId, address recipient, uint96 royaltyBps);
 
+    /**
+     * @dev Constructor to initialize the contract.
+     * @param _storageContract Address of the EscrowStorage contract.
+     */
     constructor(address _storageContract) ERC721("DoArt", "DA") {
         storageContract = EscrowStorage(_storageContract);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -39,11 +47,21 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         _grantRole(MINTER_ROLE, msg.sender);
     }
 
+    /**
+     * @dev Sets the storage contract address.
+     * @param _storageContract New storage contract address.
+     */
     function setStorageContract(address _storageContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_storageContract != address(0), "Invalid address");
         storageContract = EscrowStorage(_storageContract);
     }
 
+    /**
+     * @dev Sets metadata for an artist.
+     * @param name Artist's name.
+     * @param bio Artist's bio.
+     * @param portfolioUrl Artist's portfolio URL.
+     */
     function setArtistMetadata(string memory name, string memory bio, string memory portfolioUrl)
         public
         whenNotPaused
@@ -59,6 +77,13 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         emit ArtistMetadataUpdated(msg.sender, name, bio, portfolioUrl);
     }
 
+    /**
+     * @dev Gets metadata for an artist.
+     * @param artist Artist's address.
+     * @return name Artist's name.
+     * @return bio Artist's bio.
+     * @return portfolioUrl Artist's portfolio URL.
+     */
     function getArtistMetadata(address artist)
         public
         view
@@ -68,6 +93,12 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return (metadata.name, metadata.bio, metadata.portfolioUrl);
     }
 
+    /**
+     * @dev Mints a new token with royalty.
+     * @param metadataURI URI for token metadata.
+     * @param royaltyBps Royalty basis points.
+     * @return tokenId Minted token ID.
+     */
     function mint(string memory metadataURI, uint96 royaltyBps)
         public
         onlyRole(ARTIST_ROLE)
@@ -77,6 +108,14 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return _mintWithRoyalty(msg.sender, metadataURI, msg.sender, royaltyBps);
     }
 
+    /**
+     * @dev Mints a token for a specified address.
+     * @param to Recipient address.
+     * @param metadataURI URI for token metadata.
+     * @param royaltyRecipient Royalty recipient.
+     * @param royaltyBps Royalty basis points.
+     * @return tokenId Minted token ID.
+     */
     function mintFor(address to, string memory metadataURI, address royaltyRecipient, uint96 royaltyBps)
         public
         onlyRole(MINTER_ROLE)
@@ -97,6 +136,12 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return newItemId;
     }
 
+    /**
+     * @dev Batch mints tokens.
+     * @param metadataURIs Array of metadata URIs.
+     * @param royaltyBps Array of royalty basis points.
+     * @return tokenIds Array of minted token IDs.
+     */
     function batchMint(string[] memory metadataURIs, uint96[] memory royaltyBps)
         public
         onlyRole(ARTIST_ROLE)
@@ -114,6 +159,10 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return tokenIds;
     }
 
+    /**
+     * @dev Burns a token.
+     * @param tokenId Token ID to burn.
+     */
     function burn(uint256 tokenId)
         public
         whenNotPaused
@@ -125,18 +174,33 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         emit TokenBurned(tokenId);
     }
 
+    /**
+     * @dev Returns total supply of tokens.
+     * @return Total token count.
+     */
     function totalSupply() public view returns (uint256) {
         return _tokenIds.current();
     }
 
+    /**
+     * @dev Pauses the contract.
+     */
     function pause() public onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
+    /**
+     * @dev Unpauses the contract.
+     */
     function unpause() public onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
+    /**
+     * @dev Gets tokens owned by an address.
+     * @param owner Owner address.
+     * @return tokenIds Array of token IDs.
+     */
     function getTokensOfOwner(address owner) public view returns (uint256[] memory) {
         uint256 tokenCount = balanceOf(owner);
         uint256[] memory tokenIds = new uint256[](tokenCount);
@@ -151,6 +215,14 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return tokenIds;
     }
 
+    /**
+     * @dev Gets details of a token.
+     * @param tokenId Token ID.
+     * @return owner Token owner.
+     * @return uri Token URI.
+     * @return royaltyRecipient Royalty recipient.
+     * @return royaltyBps Royalty basis points.
+     */
     function getTokenDetails(uint256 tokenId)
         public
         view
@@ -162,6 +234,12 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return (ownerOf(tokenId), tokenURI(tokenId), recipient, bps);
     }
 
+    /**
+     * @dev Sets royalty for a token.
+     * @param tokenId Token ID.
+     * @param recipient Royalty recipient.
+     * @param royaltyBps Royalty basis points.
+     */
     function setTokenRoyalty(uint256 tokenId, address recipient, uint96 royaltyBps)
         public
         onlyRole(DEFAULT_ADMIN_ROLE)
@@ -172,6 +250,13 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         emit DebugRoyaltySet(tokenId, recipient, royaltyBps);
     }
 
+    /**
+     * @dev Debug function for royalty info.
+     * @param tokenId Token ID.
+     * @param salePrice Sale price.
+     * @return recipient Royalty recipient.
+     * @return amount Royalty amount.
+     */
     function debugRoyaltyInfo(uint256 tokenId, uint256 salePrice)
         external
         view
@@ -210,12 +295,24 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         return newItemId;
     }
 
+    /**
+     * @dev Validates if URL starts with https:// or ipfs://.
+     * @param uri URI to validate.
+     * @return True if valid.
+     */
     function _isValidUrl(string memory uri) internal pure returns (bool) {
-        bytes memory uriBytes = bytes(uri);
-        if (uriBytes.length < 7) return false;
-
-        bytes7 prefix = bytes7(uriBytes);
-        return prefix == bytes7("https:/") || prefix == bytes7("ipfs://");
+        bytes memory u = bytes(uri);
+        if (u.length >= 8) {
+            bytes8 prefix8 = bytes8(u[0]) | (bytes8(u[1]) >> 8) | (bytes8(u[2]) >> 16) | (bytes8(u[3]) >> 24) |
+                             (bytes8(u[4]) >> 32) | (bytes8(u[5]) >> 40) | (bytes8(u[6]) >> 48) | (bytes8(u[7]) >> 56);
+            if (prefix8 == bytes8("https://")) return true;
+        }
+        if (u.length >= 7) {
+            bytes7 prefix7 = bytes7(u[0]) | (bytes7(u[1]) >> 8) | (bytes7(u[2]) >> 16) | (bytes7(u[3]) >> 24) |
+                             (bytes7(u[4]) >> 32) | (bytes7(u[5]) >> 40) | (bytes7(u[6]) >> 48);
+            if (prefix7 == bytes7("ipfs://")) return true;
+        }
+        return false;
     }
 
     function _burn(uint256 tokenId) internal override(ERC721URIStorage, ERC721Royalty) {

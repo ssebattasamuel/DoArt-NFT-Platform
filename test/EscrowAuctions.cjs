@@ -1,4 +1,3 @@
-
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
@@ -27,33 +26,49 @@ describe('EscrowAuctions Contract', function () {
 
     // Deploy EscrowAuctions with placeholder for EscrowListings
     EscrowAuctions = await ethers.getContractFactory('EscrowAuctions', owner);
-    escrowAuctions = await EscrowAuctions.deploy(escrowStorage.address, ethers.constants.AddressZero);
+    escrowAuctions = await EscrowAuctions.deploy(
+      escrowStorage.address,
+      ethers.constants.AddressZero
+    );
     await escrowAuctions.deployed();
 
     // Deploy EscrowLazyMinting
-    EscrowLazyMinting = await ethers.getContractFactory('EscrowLazyMinting', owner);
+    EscrowLazyMinting = await ethers.getContractFactory(
+      'EscrowLazyMinting',
+      owner
+    );
     escrowLazyMinting = await EscrowLazyMinting.deploy(escrowStorage.address);
     await escrowLazyMinting.deployed();
 
     // Deploy EscrowListings
     EscrowListings = await ethers.getContractFactory('EscrowListings', owner);
-    escrowListings = await EscrowListings.deploy(escrowStorage.address, escrowAuctions.address);
+    escrowListings = await EscrowListings.deploy(
+      escrowStorage.address,
+      escrowAuctions.address
+    );
     await escrowListings.deployed();
 
     // Update EscrowAuctions with EscrowListings address
-    await escrowAuctions.connect(owner).setEscrowListings(escrowListings.address);
+    await escrowAuctions
+      .connect(owner)
+      .setEscrowListings(escrowListings.address);
 
     // Grant roles to EscrowListings and EscrowAuctions in EscrowStorage
-    const ADMIN_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('ADMIN_ROLE'));
-    const LISTINGS_CONTRACT_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('LISTINGS_CONTRACT'));
-    const AUCTIONS_CONTRACT_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('AUCTIONS_CONTRACT'));
-    await escrowStorage.connect(owner).grantRole(ADMIN_ROLE, escrowListings.address);
-    await escrowStorage.connect(owner).grantRole(ADMIN_ROLE, escrowAuctions.address);
-    await escrowStorage.connect(owner).grantRole(LISTINGS_CONTRACT_ROLE, escrowListings.address);
-    await escrowStorage.connect(owner).grantRole(AUCTIONS_CONTRACT_ROLE, escrowAuctions.address);
+    const ADMIN_ROLE = await escrowStorage.ADMIN_ROLE();
+    await escrowStorage
+      .connect(owner)
+      .grantRole(ADMIN_ROLE, escrowListings.address);
+    await escrowStorage
+      .connect(owner)
+      .grantRole(ADMIN_ROLE, escrowAuctions.address);
+    await escrowStorage
+      .connect(owner)
+      .grantRole(ADMIN_ROLE, escrowLazyMinting.address);
 
     // Grant ARTIST_ROLE to seller for minting
-    await doArt.connect(owner).grantRole(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('ARTIST_ROLE')), seller.address);
+    await doArt
+      .connect(owner)
+      .grantRole(await doArt.ARTIST_ROLE(), seller.address);
 
     // Mint an NFT for seller
     await doArt.connect(seller).mint('https://example.com/nft/1', 500); // 5% royalty
@@ -83,13 +98,17 @@ describe('EscrowAuctions Contract', function () {
     const auction = await escrowStorage.getAuction(doArt.address, 1);
     const block = await ethers.provider.getBlock('latest');
     console.log('Auction setup - endTime:', auction.endTime.toString());
-    console.log('Auction setup - expected endTime:', (block.timestamp + auctionDuration).toString());
+    console.log(
+      'Auction setup - expected endTime:',
+      (block.timestamp + auctionDuration).toString()
+    );
   });
 
   describe('Role Initialization', function () {
     it('Should set correct roles in constructor', async function () {
-      const PAUSER_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('PAUSER_ROLE'));
-      expect(await escrowAuctions.hasRole(PAUSER_ROLE, owner.address)).to.be.true;
+      const PAUSER_ROLE = await escrowAuctions.PAUSER_ROLE();
+      expect(await escrowAuctions.hasRole(PAUSER_ROLE, owner.address)).to.be
+        .true;
       expect(await escrowAuctions.owner()).to.equal(owner.address);
     });
   });
@@ -103,9 +122,13 @@ describe('EscrowAuctions Contract', function () {
     });
 
     it('Should revert if non-pauser tries to pause or unpause', async function () {
-      await expect(escrowAuctions.connect(other).pause()).to.be.revertedWith(/AccessControl: account/);
+      await expect(escrowAuctions.connect(other).pause()).to.be.revertedWith(
+        /AccessControl: account/
+      );
       await escrowAuctions.connect(owner).pause();
-      await expect(escrowAuctions.connect(other).unpause()).to.be.revertedWith(/AccessControl: account/);
+      await expect(escrowAuctions.connect(other).unpause()).to.be.revertedWith(
+        /AccessControl: account/
+      );
     });
   });
 
@@ -113,10 +136,17 @@ describe('EscrowAuctions Contract', function () {
     it('Should allow batch bidding on auctions', async function () {
       const tokenIds = [1];
       const amounts = [ethers.utils.parseEther('0.6')];
-      const totalValue = amounts.reduce((sum, val) => sum.add(val), ethers.BigNumber.from(0));
+      const totalValue = amounts.reduce(
+        (sum, val) => sum.add(val),
+        ethers.BigNumber.from(0)
+      );
 
       await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: totalValue })
+        escrowAuctions
+          .connect(buyer)
+          .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+            value: totalValue
+          })
       )
         .to.emit(escrowAuctions, 'BatchBidPlaced')
         .withArgs(doArt.address, tokenIds, buyer.address, amounts)
@@ -132,29 +162,52 @@ describe('EscrowAuctions Contract', function () {
       const tokenIds = [1];
       const amounts = [ethers.utils.parseEther('0.6')];
       await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: ethers.utils.parseEther('0.5') })
-      ).to.be.revertedWith('Insufficient payment');
+        escrowAuctions
+          .connect(buyer)
+          .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+            value: ethers.utils.parseEther('0.5')
+          })
+      ).to.be.revertedWith('Incorrect payment');
     });
 
     it('Should revert if token not listed', async function () {
       const tokenIds = [2]; // Non-existent token
       const amounts = [ethers.utils.parseEther('0.6')];
       await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] })
+        escrowAuctions
+          .connect(buyer)
+          .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+            value: amounts[0]
+          })
       ).to.be.revertedWith('Token not listed');
     });
 
     it('Should revert if not an auction', async function () {
       await doArt.connect(seller).mint('https://example.com/nft/2', 500);
-      await doArt.connect(seller).setApprovalForAll(escrowListings.address, true);
+      await doArt
+        .connect(seller)
+        .setApprovalForAll(escrowListings.address, true);
       await escrowListings
         .connect(seller)
-        .list(doArt.address, 2, buyer.address, price, minBid, escrowAmount, false, 0);
+        .list(
+          doArt.address,
+          2,
+          buyer.address,
+          price,
+          minBid,
+          escrowAmount,
+          false,
+          0
+        );
 
       const tokenIds = [2];
       const amounts = [ethers.utils.parseEther('0.6')];
       await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] })
+        escrowAuctions
+          .connect(buyer)
+          .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+            value: amounts[0]
+          })
       ).to.be.revertedWith('Not an auction');
     });
 
@@ -162,83 +215,54 @@ describe('EscrowAuctions Contract', function () {
       const tokenIds = [1];
       const amounts = [ethers.utils.parseEther('0.4')]; // Below minBid
       await expect(
-        escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] })
+        escrowAuctions
+          .connect(buyer)
+          .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+            value: amounts[0]
+          })
       ).to.be.revertedWith('Bid too low');
     });
 
-    // it('Should extend auction if bid is within anti-sniping window', async function () {
-    //   const tokenIds = [1];
-    //   const amounts = [ethers.utils.parseEther('0.6')];
-    //   const block = await ethers.provider.getBlock('latest');
-    //   const currentTime = block.timestamp;
-
-    //   // Log auction setup
-    //   const auctionBeforeSetup = await escrowStorage.getAuction(doArt.address, 1);
-    //   console.log('Auction setup - endTime:', auctionBeforeSetup.endTime.toString());
-    //   console.log('Auction setup - expected endTime:', (currentTime + auctionDuration).toString());
-
-    //   await ethers.provider.send('evm_increaseTime', [auctionDuration - 300]);
-    //   await ethers.provider.send('evm_mine');
-
-    //   // Log before bid
-    //   const auctionBefore = await escrowStorage.getAuction(doArt.address, 1);
-    //   console.log('Before bid - auction.endTime:', auctionBefore.endTime.toString());
-
-    //   const tx = await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] });
-    //   const receipt = await tx.wait();
-    //   const txBlock = await ethers.provider.getBlock(receipt.blockNumber);
-    //   const blockTimestamp = txBlock.timestamp;
-    //   console.log('After bid - blockTimestamp:', blockTimestamp);
-
-    //   // Log DebugTimestamp event
-    //   const debugEvent = receipt.events?.find(e => e.event === 'DebugTimestamp');
-    //   console.log('DebugTimestamp:', {
-    //     blockTimestamp: debugEvent?.args?.blockTimestamp?.toString(),
-    //     auctionEndTime: debugEvent?.args?.auctionEndTime?.toString(),
-    //     antiSnipingWindow: debugEvent?.args?.antiSnipingWindow?.toString(),
-    //     isWithinWindow: debugEvent?.args?.isWithinWindow
-    //   });
-
-    //   const expectedEndTime = blockTimestamp + 600; // ANTI_SNIPING_EXTENSION = 600 seconds
-    //   await expect(tx)
-    //     .to.emit(escrowAuctions, 'AuctionExtended')
-    //     .withArgs(doArt.address, 1, expectedEndTime);
-
-    //   const auction = await escrowStorage.getAuction(doArt.address, 1);
-    //   console.log('After bid - auction.endTime:', auction.endTime.toString());
-    //   console.log('After bid - expectedEndTime:', expectedEndTime.toString());
-    //   expect(auction.endTime).to.be.closeTo(expectedEndTime, 1);
-    // });
     it('Should extend auction if bid is within anti-sniping window', async function () {
-  const tokenIds = [1];
-  const amounts = [ethers.utils.parseEther('0.6')];
-  await ethers.provider.send('evm_increaseTime', [auctionDuration - 300]);
-  await ethers.provider.send('evm_mine');
+      const tokenIds = [1];
+      const amounts = [ethers.utils.parseEther('0.6')];
+      await ethers.provider.send('evm_increaseTime', [auctionDuration - 300]);
+      await ethers.provider.send('evm_mine');
 
-  const tx = await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, tokenIds, amounts, { value: amounts[0] });
-  const receipt = await tx.wait();
-  const txBlock = await ethers.provider.getBlock(receipt.blockNumber);
-  const blockTimestamp = txBlock.timestamp;
+      const tx = await escrowAuctions
+        .connect(buyer)
+        .batchPlaceAuctionBid(doArt.address, tokenIds, amounts, {
+          value: amounts[0]
+        });
+      const receipt = await tx.wait();
+      const txBlock = await ethers.provider.getBlock(receipt.blockNumber);
+      const blockTimestamp = txBlock.timestamp;
 
-  const expectedEndTime = blockTimestamp + 600; // ANTI_SNIPING_EXTENSION = 600 seconds
-  await expect(tx)
-    .to.emit(escrowAuctions, 'AuctionExtended')
-    .withArgs(doArt.address, 1, expectedEndTime);
+      const expectedEndTime = blockTimestamp + 600; // ANTI_SNIPING_EXTENSION = 600 seconds
+      await expect(tx)
+        .to.emit(escrowAuctions, 'AuctionExtended')
+        .withArgs(doArt.address, 1, expectedEndTime);
 
-  const auction = await escrowStorage.getAuction(doArt.address, 1);
-  expect(auction.endTime).to.be.closeTo(expectedEndTime, 1);
-});
+      const auction = await escrowStorage.getAuction(doArt.address, 1);
+      expect(auction.endTime).to.be.closeTo(expectedEndTime, 1);
+    });
   });
 
   describe('End Auction', function () {
     it('Should finalize auction with highest bidder', async function () {
       const bidAmount = ethers.utils.parseEther('0.6');
-      await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, [1], [bidAmount], { value: bidAmount });
+      await escrowAuctions
+        .connect(buyer)
+        .batchPlaceAuctionBid(doArt.address, [1], [bidAmount], {
+          value: bidAmount
+        });
 
       await ethers.provider.send('evm_increaseTime', [auctionDuration + 1]);
       await ethers.provider.send('evm_mine');
 
-      const sellerBalanceBefore = await ethers.provider.getBalance(seller.address);
+      const sellerBalanceBefore = await ethers.provider.getBalance(
+        seller.address
+      );
       await expect(escrowAuctions.endAuction(doArt.address, 1))
         .to.emit(escrowAuctions, 'AuctionFinalized')
         .withArgs(doArt.address, 1, seller.address, buyer.address, bidAmount)
@@ -246,7 +270,9 @@ describe('EscrowAuctions Contract', function () {
         .withArgs(escrowListings.address, buyer.address, 1);
 
       expect(await doArt.ownerOf(1)).to.equal(buyer.address);
-      const sellerBalanceAfter = await ethers.provider.getBalance(seller.address);
+      const sellerBalanceAfter = await ethers.provider.getBalance(
+        seller.address
+      );
       expect(sellerBalanceAfter).to.be.gt(sellerBalanceBefore); // Seller received payment
     });
 
@@ -264,27 +290,46 @@ describe('EscrowAuctions Contract', function () {
     });
 
     it('Should revert if auction not ended', async function () {
-      await expect(escrowAuctions.endAuction(doArt.address, 1)).to.be.revertedWith('Auction not yet ended');
+      await expect(
+        escrowAuctions.endAuction(doArt.address, 1)
+      ).to.be.revertedWith('Auction not yet ended');
     });
 
     it('Should revert if token not listed', async function () {
-      await expect(escrowAuctions.endAuction(doArt.address, 2)).to.be.revertedWith('Token not listed');
+      await expect(
+        escrowAuctions.endAuction(doArt.address, 2)
+      ).to.be.revertedWith('Token not listed');
     });
 
     it('Should revert if not an auction', async function () {
       await doArt.connect(seller).mint('https://example.com/nft/2', 500);
-      await doArt.connect(seller).setApprovalForAll(escrowListings.address, true);
+      await doArt
+        .connect(seller)
+        .setApprovalForAll(escrowListings.address, true);
       await escrowListings
         .connect(seller)
-        .list(doArt.address, 2, buyer.address, price, minBid, escrowAmount, false, 0);
+        .list(
+          doArt.address,
+          2,
+          buyer.address,
+          price,
+          minBid,
+          escrowAmount,
+          false,
+          0
+        );
 
-      await expect(escrowAuctions.endAuction(doArt.address, 2)).to.be.revertedWith('Not an auction');
+      await expect(
+        escrowAuctions.endAuction(doArt.address, 2)
+      ).to.be.revertedWith('Not an auction');
     });
   });
 
-  describe('Cancel Sale', function () {
+  describe('Cancel Auction', function () {
     it('Should allow seller to cancel auction', async function () {
-      await expect(escrowAuctions.connect(seller).cancelSale(doArt.address, 1))
+      await expect(
+        escrowAuctions.connect(seller).cancelAuction(doArt.address, 1)
+      )
         .to.emit(escrowAuctions, 'AuctionCanceled')
         .withArgs(doArt.address, 1, seller.address)
         .to.emit(doArt, 'Transfer')
@@ -294,7 +339,9 @@ describe('EscrowAuctions Contract', function () {
     });
 
     it('Should allow buyer to cancel auction with no bids', async function () {
-      await expect(escrowAuctions.connect(buyer).cancelSale(doArt.address, 1))
+      await expect(
+        escrowAuctions.connect(buyer).cancelAuction(doArt.address, 1)
+      )
         .to.emit(escrowAuctions, 'AuctionCanceled')
         .withArgs(doArt.address, 1, buyer.address)
         .to.emit(doArt, 'Transfer')
@@ -304,19 +351,29 @@ describe('EscrowAuctions Contract', function () {
     });
 
     it('Should revert if buyer tries to cancel with bids', async function () {
-      await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, [1], [minBid], { value: minBid });
-      await expect(escrowAuctions.connect(buyer).cancelSale(doArt.address, 1)).to.be.revertedWith('Only seller or buyer with no bids can cancel');
+      await escrowAuctions
+        .connect(buyer)
+        .batchPlaceAuctionBid(doArt.address, [1], [minBid], { value: minBid });
+      await expect(
+        escrowAuctions.connect(buyer).cancelAuction(doArt.address, 1)
+      ).to.be.revertedWith('Only seller or buyer with no bids can cancel');
     });
 
     it('Should revert if non-seller/non-buyer tries to cancel', async function () {
-      await expect(escrowAuctions.connect(other).cancelSale(doArt.address, 1)).to.be.revertedWith('Only seller or buyer with no bids can cancel');
+      await expect(
+        escrowAuctions.connect(other).cancelAuction(doArt.address, 1)
+      ).to.be.revertedWith('Only seller or buyer with no bids can cancel');
     });
   });
 
   describe('Royalty Handling', function () {
     it('Should pay royalty when finalizing auction', async function () {
       const bidAmount = ethers.utils.parseEther('1');
-      await escrowAuctions.connect(buyer).batchPlaceAuctionBid(doArt.address, [1], [bidAmount], { value: bidAmount });
+      await escrowAuctions
+        .connect(buyer)
+        .batchPlaceAuctionBid(doArt.address, [1], [bidAmount], {
+          value: bidAmount
+        });
 
       await ethers.provider.send('evm_increaseTime', [auctionDuration + 1]);
       await ethers.provider.send('evm_mine');
@@ -336,14 +393,29 @@ describe('EscrowAuctions Contract', function () {
       const mockNFT = await MockERC721.deploy();
       await mockNFT.deployed();
       await mockNFT.mint(seller.address, 1);
-      await mockNFT.connect(seller).setApprovalForAll(escrowListings.address, true);
+      await mockNFT
+        .connect(seller)
+        .setApprovalForAll(escrowListings.address, true);
 
       await escrowListings
         .connect(seller)
-        .list(mockNFT.address, 1, buyer.address, price, minBid, escrowAmount, true, auctionDuration);
+        .list(
+          mockNFT.address,
+          1,
+          buyer.address,
+          price,
+          minBid,
+          escrowAmount,
+          true,
+          auctionDuration
+        );
 
       const bidAmount = ethers.utils.parseEther('1');
-      await escrowAuctions.connect(buyer).batchPlaceAuctionBid(mockNFT.address, [1], [bidAmount], { value: bidAmount });
+      await escrowAuctions
+        .connect(buyer)
+        .batchPlaceAuctionBid(mockNFT.address, [1], [bidAmount], {
+          value: bidAmount
+        });
 
       await ethers.provider.send('evm_increaseTime', [auctionDuration + 1]);
       await ethers.provider.send('evm_mine');
@@ -356,18 +428,33 @@ describe('EscrowAuctions Contract', function () {
 
   describe('Set EscrowListings', function () {
     it('Should allow owner to set EscrowListings address', async function () {
-      const newEscrowListings = await EscrowListings.deploy(escrowStorage.address, escrowAuctions.address);
+      const newEscrowListings = await EscrowListings.deploy(
+        escrowStorage.address,
+        escrowAuctions.address
+      );
       await newEscrowListings.deployed();
-      await escrowAuctions.connect(owner).setEscrowListings(newEscrowListings.address);
-      expect(await escrowAuctions.escrowListings()).to.equal(newEscrowListings.address);
+      await escrowAuctions
+        .connect(owner)
+        .setEscrowListings(newEscrowListings.address);
+      expect(await escrowAuctions.escrowListings()).to.equal(
+        newEscrowListings.address
+      );
     });
 
     it('Should revert if non-owner tries to set EscrowListings', async function () {
-      await expect(escrowAuctions.connect(other).setEscrowListings(ethers.constants.AddressZero)).to.be.revertedWith('Only owner');
+      await expect(
+        escrowAuctions
+          .connect(other)
+          .setEscrowListings(ethers.constants.AddressZero)
+      ).to.be.revertedWith('Ownable: caller is not the owner');
     });
 
     it('Should revert if invalid address is provided', async function () {
-      await expect(escrowAuctions.connect(owner).setEscrowListings(ethers.constants.AddressZero)).to.be.revertedWith('Invalid address');
+      await expect(
+        escrowAuctions
+          .connect(owner)
+          .setEscrowListings(ethers.constants.AddressZero)
+      ).to.be.revertedWith('Invalid address');
     });
   });
 });

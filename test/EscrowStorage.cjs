@@ -164,14 +164,14 @@ describe('EscrowStorage Contract', function () {
       await escrowStorage.connect(admin).setListing(doArt.address, 1, listing);
       await escrowStorage.connect(admin).setListing(doArt.address, 2, listing2);
 
-      const listings = await escrowStorage.getListings();
+      const listings = await escrowStorage.getAllListings();
       expect(listings.length).to.equal(2);
       expect(listings[0].tokenId).to.equal(1);
       expect(listings[1].tokenId).to.equal(2);
     });
 
     it('Should return empty array if no listings', async function () {
-      const listings = await escrowStorage.getListings();
+      const listings = await escrowStorage.getAllListings();
       expect(listings.length).to.equal(0);
     });
   });
@@ -276,12 +276,12 @@ describe('EscrowStorage Contract', function () {
       await escrowStorage.connect(admin).setAuction(doArt.address, 1, auction);
       await escrowStorage.connect(admin).setAuction(doArt.address, 2, auction2);
 
-      const auctions = await escrowStorage.getAuctions();
+      const auctions = await escrowStorage.getAllAuctions();
       expect(auctions.length).to.equal(2);
     });
 
     it('Should return empty array if no auctions', async function () {
-      const auctions = await escrowStorage.getAuctions();
+      const auctions = await escrowStorage.getAllAuctions();
       expect(auctions.length).to.equal(0);
     });
   });

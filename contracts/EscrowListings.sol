@@ -1,4 +1,3 @@
-
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.9;
 
@@ -9,6 +8,10 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+/**
+ * @title EscrowListings Contract
+ * @dev Handles NFT listings, direct sales, deposits, and approvals.
+ */
 contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
     EscrowStorage public storageContract;
     address public escrowAuctions;
@@ -36,42 +39,36 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         bool isAuction,
         uint256 auctionDuration
     );
-
     event ListingUpdated(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed seller,
         uint256 newPrice
     );
-
     event EarnestDeposited(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed buyer,
         uint256 depositAmount
     );
-
     event ArtworkApprovalUpdated(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed buyer,
         bool approved
     );
-
     event SaleApproved(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed approver,
         address buyer
     );
-
     event RoyaltyPaid(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed recipient,
         uint256 amount
     );
-
     event SaleFinalized(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -79,13 +76,11 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         address indexed buyer,
         uint256 price
     );
-
     event SaleCanceled(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed canceler
     );
-
     event ViewingPeriodExtended(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -93,16 +88,26 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         uint256 newViewingPeriodEnd
     );
 
+    /**
+     * @dev Constructor.
+     * @param _storageContract Storage address.
+     * @param _escrowAuctions Auctions address.
+     */
     constructor(address _storageContract, address _escrowAuctions) {
         storageContract = EscrowStorage(_storageContract);
         escrowAuctions = _escrowAuctions;
         _grantRole(PAUSER_ROLE, msg.sender);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
+
+    /**
+     * @dev Sets escrow auctions address.
+     * @param _escrowAuctions New address.
+     */
     function setEscrowAuctions(address _escrowAuctions) external onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(_escrowAuctions != address(0), "Invalid address");
-    escrowAuctions = _escrowAuctions;
-}
+        require(_escrowAuctions != address(0), "Invalid address");
+        escrowAuctions = _escrowAuctions;
+    }
 
     function pause() external onlyRole(PAUSER_ROLE) {
         _pause();
@@ -127,6 +132,17 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         _;
     }
 
+    /**
+     * @dev Lists an NFT for sale or auction.
+     * @param nftContract NFT contract.
+     * @param tokenId Token ID.
+     * @param buyer Designated buyer (optional).
+     * @param price Fixed price.
+     * @param minBid Minimum bid.
+     * @param escrowAmount Escrow amount for deposits.
+     * @param isAuction If auction.
+     * @param auctionDuration Auction duration.
+     */
     function list(
         address nftContract,
         uint256 tokenId,
@@ -168,6 +184,10 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         );
     }
 
+    /**
+     * @dev Batch lists NFTs.
+     * @param params Array of listing params.
+     */
     function batchList(
         ListingParams[] calldata params
     ) external nonReentrant whenNotPaused {
@@ -182,7 +202,7 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
                 IERC721(params[i].nftContract).approve(escrowAuctions, params[i].tokenId);
                 _createAuction(params[i].nftContract, params[i].tokenId, params[i].minBid, params[i].auctionDuration);
             }
-           
+            
             emit NFTListed(
                 params[i].nftContract,
                 params[i].tokenId,
@@ -279,7 +299,7 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         require(!listing.isAuction, "Cannot finalize auctions");
         require(listing.isApproved, "Artwork not approved");
         require(listing.buyerDeposit >= listing.escrowAmount, "Deposit not met");
-        require(msg.value >= listing.price, "Insufficient payment");
+        require(msg.value == listing.price, "Incorrect payment");  // Changed to == for exact
         require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
         require(listing.buyer == address(0) || msg.sender == listing.buyer, "Only designated buyer");
         require(listing.saleApprover != address(0), "Sale not approved");
@@ -290,16 +310,19 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         uint256 sellerAmount = listing.price - royaltyAmount;
 
         if (royaltyAmount > 0) {
-            payable(royaltyRecipient).transfer(royaltyAmount);
+            (bool success, ) = payable(royaltyRecipient).call{value: royaltyAmount}("");
+            require(success, "Royalty payment failed");
             emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
         }
 
-        payable(listing.seller).transfer(sellerAmount);
+        (bool successSeller, ) = payable(listing.seller).call{value: sellerAmount}("");
+        require(successSeller, "Seller payment failed");
 
         IERC721(nftContract).transferFrom(address(this), buyer, tokenId);
 
         if (listing.buyerDeposit > 0) {
-            payable(buyer).transfer(listing.buyerDeposit);
+            (bool successDeposit, ) = payable(buyer).call{value: listing.buyerDeposit}("");
+            require(successDeposit, "Deposit refund failed");
         }
 
         storageContract.deleteListing(nftContract, tokenId);
@@ -320,12 +343,14 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
 
         EscrowStorage.Bid[] memory bidList = storageContract.getBids(nftContract, tokenId);
         for (uint256 i = 0; i < bidList.length; i++) {
-            payable(bidList[i].bidder).transfer(bidList[i].amount);
+            (bool successBid, ) = payable(bidList[i].bidder).call{value: bidList[i].amount}("");
+            require(successBid, "Bid refund failed");
         }
         storageContract.deleteBids(nftContract, tokenId);
 
         if (listing.buyerDeposit > 0) {
-            payable(listing.buyer).transfer(listing.buyerDeposit);
+            (bool successDeposit, ) = payable(listing.buyer).call{value: listing.buyerDeposit}("");
+            require(successDeposit, "Deposit refund failed");
         }
 
         IERC721(nftContract).transferFrom(address(this), listing.seller, tokenId);
@@ -349,12 +374,7 @@ contract EscrowListings is Pausable, ReentrancyGuard, AccessControl {
         emit ViewingPeriodExtended(nftContract, tokenId, msg.sender, newListing.viewingPeriodEnd);
     }
 
-    // function transferForAuction(address nftContract, uint256 tokenId, address to) external whenNotPaused {
-    //     require(msg.sender == escrowAuctions, "Only EscrowAuctions");
-    //     require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");
-        
-    //     IERC721(nftContract).transferFrom(address(this), to, tokenId);
-    // }
+   
     function transferForAuction(address nftContract, uint256 tokenId, address to) external whenNotPaused {
     require(msg.sender == escrowAuctions, "Only EscrowAuctions");
     require(IERC721(nftContract).ownerOf(tokenId) == address(this), "Token not in escrow");

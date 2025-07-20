@@ -10,6 +10,10 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 
+/**
+ * @title EscrowAuctions Contract
+ * @dev Handles auction logic for NFTs, including bidding and finalization.
+ */
 interface IEscrowListings {
     function transferForAuction(address nftContract, uint256 tokenId, address to) external;
 }
@@ -20,38 +24,29 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    // Emitted when a royalty is paid
     event RoyaltyPaid(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed recipient,
         uint256 amount
     );
-
-    // Emitted when multiple bids are placed
     event BatchBidPlaced(
         address indexed nftContract,
         uint256[] tokenIds,
         address indexed bidder,
         uint256[] amounts
     );
-
-    // Emitted when a single bid is placed
     event BidPlaced(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed bidder,
         uint256 amount
     );
-
-    // Emitted when an auction is extended due to anti-sniping
     event AuctionExtended(
         address indexed nftContract,
         uint256 indexed tokenId,
         uint256 newEndTime
     );
-
-    // Emitted when an auction is finalized
     event AuctionFinalized(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -59,15 +54,11 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         address buyer,
         uint256 amount
     );
-
-    // Emitted when an auction is canceled
     event AuctionCanceled(
         address indexed nftContract,
         uint256 indexed tokenId,
         address indexed caller
     );
-
-    // Emitted when a bid is refunded
     event BidRefunded(
         address indexed nftContract,
         uint256 indexed tokenId,
@@ -75,19 +66,17 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         uint256 amount
     );
 
-    // Debug event for timestamp verification
-    event DebugTimestamp(uint256 blockTimestamp, uint256 auctionEndTime, uint256 antiSnipingWindow, bool isWithinWindow);
-
-    // Debug event for callEscrowListings
-    event CallDebug(bytes data, address caller, bool success, bytes returnData);
-
-    constructor(address _storageContract, address _escrowListings) Ownable() {
+    /**
+     * @dev Constructor.
+     * @param _storageContract Storage contract address.
+     * @param _escrowListings Listings contract address.
+     */
+    constructor(address _storageContract, address _escrowListings) {
         storageContract = EscrowStorage(_storageContract);
         escrowListings = _escrowListings;
         _grantRole(PAUSER_ROLE, msg.sender);
     }
 
-    // Implement IERC721Receiver
     function onERC721Received(
         address /* operator */,
         address /* from */,
@@ -95,25 +84,6 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         bytes calldata /* data */
     ) external pure override returns (bytes4) {
         return this.onERC721Received.selector;
-    }
-
-    function callEscrowListings(address nftContract, uint256 tokenId, address to) external onlyOwner whenNotPaused {
-        require(escrowListings != address(0), "EscrowListings not set");
-        (bool success, bytes memory returnData) = escrowListings.call(
-            abi.encodeWithSelector(
-                IEscrowListings.transferForAuction.selector,
-                nftContract,
-                tokenId,
-                to
-            )
-        );
-        emit CallDebug(abi.encodeWithSelector(IEscrowListings.transferForAuction.selector, nftContract, tokenId, to), msg.sender, success, returnData);
-        require(success, "Call to EscrowListings failed");
-    }
-
-    function directSafeTransfer(address nftContract, uint256 tokenId, address to) external nonReentrant {
-        require(IERC721(nftContract).ownerOf(tokenId) == escrowListings, "Token not in escrow");
-        IERC721(nftContract).safeTransferFrom(escrowListings, to, tokenId);
     }
 
     function pause() external onlyRole(PAUSER_ROLE) {
@@ -143,7 +113,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         for (uint256 i = 0; i < amounts.length; i++) {
             totalValue += amounts[i];
         }
-        require(msg.value >= totalValue, "Insufficient payment");
+        require(msg.value == totalValue, "Incorrect payment");  // Changed to == for exact match
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
             _placeBid(nftContract, tokenIds[i], amounts[i]);
@@ -165,7 +135,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         for (uint256 i = 0; i < amounts.length; i++) {
             totalValue += amounts[i];
         }
-        require(msg.value >= totalValue, "Insufficient payment");
+        require(msg.value == totalValue, "Incorrect payment");
 
         for (uint256 i = 0; i < tokenIds.length; i++) {
             _placeAuctionBid(nftContract, tokenIds[i], amounts[i]);
@@ -205,7 +175,8 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
                 "Bid too low");
 
         if (auction.highestBidder != address(0)) {
-            payable(auction.highestBidder).transfer(auction.highestBid);
+            (bool success, ) = payable(auction.highestBidder).call{value: auction.highestBid}("");
+            require(success, "Refund failed");
             emit BidRefunded(nftContract, tokenId, auction.highestBidder, auction.highestBid);
         }
 
@@ -253,31 +224,45 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         address buyer = bidList[bidIndex].bidder;
         uint256 salePrice = bidList[bidIndex].amount;
 
-        for (uint256 i = 0; i < bidList.length; i++) {
-            if (i != bidIndex) {
-                payable(bidList[i].bidder).transfer(bidList[i].amount);
-                emit BidRefunded(nftContract, tokenId, bidList[i].bidder, bidList[i].amount);
-            }
-        }
+        _refundOtherBids(nftContract, tokenId, bidList, bidIndex);
+
         storageContract.deleteBids(nftContract, tokenId);
 
-        (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, salePrice);
-        uint256 sellerAmount = salePrice - royaltyAmount;
+        _handlePayments(nftContract, tokenId, salePrice, listing.seller);
 
-        if (royaltyAmount > 0) {
-            payable(royaltyRecipient).transfer(royaltyAmount);
-            emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
-        }
-
-        payable(listing.seller).transfer(sellerAmount);
         IERC721(nftContract).safeTransferFrom(escrowListings, buyer, tokenId);
 
         if (listing.buyerDeposit > 0) {
-            payable(listing.buyer).transfer(listing.buyerDeposit);
+            (bool successDeposit, ) = payable(listing.buyer).call{value: listing.buyerDeposit}("");
+            require(successDeposit, "Deposit refund failed");
             emit BidRefunded(nftContract, tokenId, listing.buyer, listing.buyerDeposit);
         }
 
         storageContract.deleteListing(nftContract, tokenId);
+    }
+
+    function _refundOtherBids(address nftContract, uint256 tokenId, EscrowStorage.Bid[] memory bidList, uint256 acceptedIndex) internal {
+        for (uint256 i = 0; i < bidList.length; i++) {
+            if (i != acceptedIndex) {
+                (bool success, ) = payable(bidList[i].bidder).call{value: bidList[i].amount}("");
+                require(success, "Refund failed");
+                emit BidRefunded(nftContract, tokenId, bidList[i].bidder, bidList[i].amount);
+            }
+        }
+    }
+
+    function _handlePayments(address nftContract, uint256 tokenId, uint256 salePrice, address seller) internal {
+        (address royaltyRecipient, uint256 royaltyAmount) = _calculateRoyalty(nftContract, tokenId, salePrice);
+        uint256 sellerAmount = salePrice - royaltyAmount;
+
+        if (royaltyAmount > 0) {
+            (bool success, ) = payable(royaltyRecipient).call{value: royaltyAmount}("");
+            require(success, "Royalty payment failed");
+            emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
+        }
+
+        (bool successSeller, ) = payable(seller).call{value: sellerAmount}("");
+        require(successSeller, "Seller payment failed");
     }
 
     function endAuction(address nftContract, uint256 tokenId) 
@@ -312,7 +297,7 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         }
     }
 
-    function cancelSale(address nftContract, uint256 tokenId) 
+    function cancelAuction(address nftContract, uint256 tokenId) 
         external 
         nonReentrant 
         whenNotPaused 
@@ -325,7 +310,8 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
             "Only seller or buyer with no bids can cancel");
 
         if (auction.highestBidder != address(0)) {
-            payable(auction.highestBidder).transfer(auction.highestBid);
+            (bool success, ) = payable(auction.highestBidder).call{value: auction.highestBid}("");
+            require(success, "Refund failed");
             emit BidRefunded(nftContract, tokenId, auction.highestBidder, auction.highestBid);
         }
 
@@ -358,11 +344,13 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
         uint256 sellerAmount = highestBid - royaltyAmount;
 
         if (royaltyAmount > 0) {
-            payable(royaltyRecipient).transfer(royaltyAmount);
+            (bool success, ) = payable(royaltyRecipient).call{value: royaltyAmount}("");
+            require(success, "Royalty payment failed");
             emit RoyaltyPaid(nftContract, tokenId, royaltyRecipient, royaltyAmount);
         }
 
-        payable(seller).transfer(sellerAmount);
+        (bool successSeller, ) = payable(seller).call{value: sellerAmount}("");
+        require(successSeller, "Seller payment failed");
         IERC721(nftContract).safeTransferFrom(escrowListings, highestBidder, tokenId);
 
         storageContract.deleteListing(nftContract, tokenId);
@@ -371,8 +359,8 @@ contract EscrowAuctions is Ownable, ReentrancyGuard, Pausable, AccessControl, IE
 
     function setEscrowListings(address _escrowListings) 
         external 
+        onlyOwner
     {
-        require(msg.sender == owner(), "Only owner");
         require(_escrowListings != address(0), "Invalid address");
         escrowListings = _escrowListings;
     }
