@@ -123,3 +123,80 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
 }
 
 export default CreateNftForm;
+/*
+import { useForm } from 'react-hook-form';
+import Button from './Button';
+import FileInput from './FileInput';
+import Form from './Form';
+import FormRow from './FormRow';
+import Input from './Input';
+import Textarea from './Textarea';
+
+function CreateNftForm({ onCloseModal }) {
+  const { register, handleSubmit, reset, formState } = useForm();
+  const { errors } = formState;
+
+  function onSubmit(data) {
+    reset();
+    onCloseModal?.();
+  }
+
+  return (
+    <Form
+      onSubmit={handleSubmit(onSubmit)}
+      type={onCloseModal ? 'modal' : 'regular'}
+    >
+      <FormRow label="NFT title" error={errors?.title?.message}>
+        <Input
+          type="text"
+          id="title"
+          {...register('title', { required: 'This field is required' })}
+        />
+      </FormRow>
+
+      <FormRow
+        label="Purchase price (ETH)"
+        error={errors?.purchasePrice?.message}
+      >
+        <Input
+          type="number"
+          id="purchasePrice"
+          {...register('purchasePrice', {
+            required: 'This field is required',
+            validate: (value) => value > 0 || 'Price cannot be zero'
+          })}
+        />
+      </FormRow>
+
+      <FormRow label="Description" error={errors?.description?.message}>
+        <Textarea
+          id="description"
+          {...register('description', { required: 'This field is required' })}
+        />
+      </FormRow>
+
+      <FormRow label="NFT Image" error={errors?.image?.message}>
+        <FileInput
+          id="image"
+          accept="image/*"
+          {...register('image', {
+            required: 'This field is required'
+          })}
+        />
+      </FormRow>
+
+      <FormRow>
+        <Button
+          variation="secondary"
+          type="reset"
+          onClick={() => onCloseModal?.()}
+        >
+          Cancel
+        </Button>
+        <Button>Mint NFT</Button>
+      </FormRow>
+    </Form>
+  );
+}
+
+export default CreateNftForm;*/

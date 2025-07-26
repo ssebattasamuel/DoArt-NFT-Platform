@@ -11,8 +11,8 @@ export function useNfts() {
       throw new Error('Contracts not initialized');
     }
 
-    const listings = await contracts.escrowStorage.getListings();
-    const auctions = await contracts.escrowStorage.getAuctions();
+    const listings = (await contracts.escrowStorage.getAllListings()) || [];
+    const auctions = (await contracts.escrowStorage.getAllAuctions()) || [];
 
     const nfts = await Promise.all(
       listings.map(async (listing) => {
@@ -29,10 +29,8 @@ export function useNfts() {
           metadata = { name: `Token #${tokenId}`, image: '', description: '' };
         }
 
-        const bids = await contracts.escrowStorage.getBids(
-          contractAddress,
-          tokenId
-        );
+        const bids =
+          (await contracts.escrowStorage.bids(contractAddress, tokenId)) || [];
         const auction = auctions.find(
           (a) =>
             a.contractAddress === contractAddress &&

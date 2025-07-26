@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   BrowserRouter as Router,
   Navigate,
@@ -25,9 +26,22 @@ const queryClient = new QueryClient({
   }
 });
 
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    return this.state.hasError ? (
+      <div>Error: {this.state.error.message}</div>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 function App() {
-  const { provider, signer, account, isLoading, error, connectWallet } =
-    useWeb3();
+  const { isLoading, error, connectWallet } = useWeb3();
 
   if (isLoading) return <div>Loading Web3...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -35,23 +49,21 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalStyles />
-      <Router>
-        <Routes>
-          <Route
-            element={
-              <AppLayout account={account} connectWallet={connectWallet} />
-            }
-          >
-            <Route index element={<Navigate replace to="dashboard" />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="trades" element={<Trades />} />
-            <Route path="account" element={<Account />} />
-            <Route path="gallery" element={<Gallery />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="*" element={<PageNotFound />} />
-        </Routes>
-      </Router>
+      <ErrorBoundary>
+        <Router>
+          <Routes>
+            <Route element={<AppLayout connectWallet={connectWallet} />}>
+              <Route index element={<Navigate replace to="dashboard" />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="trades" element={<Trades />} />
+              <Route path="account" element={<Account />} />
+              <Route path="gallery" element={<Gallery />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+            <Route path="*" element={<PageNotFound />} />
+          </Routes>
+        </Router>
+      </ErrorBoundary>
       <Toaster
         position="top-center"
         gutter={12}

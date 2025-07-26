@@ -23,13 +23,13 @@ export function usePause() {
   });
 
   const { mutate: pauseContract, isLoading: isPausing } = useMutation({
-    mutationFn: ({ contract, name }) => pauseContract(name, contract),
+    mutationFn: ({ contract, name }) => pauseContract(contract, name),
     onSuccess: () => refetch(),
     onError: (err) => toast.error(`Failed to pause ${name}: ${err.message}`)
   });
 
   const { mutate: unpauseContract } = useMutation({
-    mutationFn: ({ contract, name }) => unpauseContract(name, contract),
+    mutationFn: ({ contract, name }) => unpauseContract(contract, name),
     onSuccess: () => refetch(),
     onError: (err) => toast.error(`Failed to unpause ${name}: ${err.message}`)
   });

@@ -15,6 +15,10 @@ import { useAcceptBid } from '../hooks/useAcceptBid';
 import { useEndAuction } from '../hooks/useEndAuction';
 import { useEditNft } from '../hooks/useEditNft';
 import { formatCurrency } from '../utils/helpers';
+import { useBurnNft } from '../hooks/useBurnNft';
+import { useSetTokenRoyalty } from '../hooks/useSetTokenRoyalty';
+import { useGetTokenDetails } from '../hooks/useGetTokenDetails';
+import { useCancelAuction } from '../hooks/useCancelAuction';
 
 const Card = styled.div`
   background: var(--color-grey-0);
@@ -102,18 +106,10 @@ function BidForm({ onSubmit, isLoading, onCloseModal, nftName }) {
         />
       </FormRow>
       <FormRow>
-        <Button
-          variation="secondary"
-          onClick={onCloseModal}
-          aria-label={`Cancel bid for NFT ${nftName}`}
-        >
+        <Button variation="secondary" onClick={onCloseModal}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={isLoading}
-          aria-label={`Submit bid for NFT ${nftName}`}
-        >
+        <Button type="submit" disabled={isLoading}>
           {isLoading ? 'Placing Bid...' : 'Place Bid'}
         </Button>
       </FormRow>
@@ -129,7 +125,8 @@ function ArtNftCard({ nft }) {
     auction,
     metadata,
     bids = []
-  } = nft;
+  } = nft || {};
+
   const { signer, account, contracts } = useWeb3();
   const { placeBid, isBidding } = useBid();
   const { placeAuctionBid, isAuctionBidding } = useAuctionBid();
@@ -139,6 +136,12 @@ function ArtNftCard({ nft }) {
   const queryClient = useQueryClient();
   const [newPrice, setNewPrice] = useState('');
   const [timeLeft, setTimeLeft] = useState('');
+  const { burn, isBurning } = useBurnNft();
+  const { setRoyalty, isSetting } = useSetTokenRoyalty();
+  const { details, isLoading: isDetailsLoading } = useGetTokenDetails(tokenId);
+  const { cancel, isCanceling } = useCancelAuction();
+  const [royaltyRecipient, setRoyaltyRecipient] = useState('');
+  const [royaltyBps, setRoyaltyBps] = useState('');
 
   useEffect(() => {
     if (!auction?.isActive || !auction?.endTime) return;
@@ -170,7 +173,7 @@ function ArtNftCard({ nft }) {
         tokenId,
         true
       );
-      await tx.wait();
+      await approveTx.wait();
     },
     onSuccess: () => {
       toast.success('Purchase successful!');
@@ -214,7 +217,6 @@ function ArtNftCard({ nft }) {
                 disabled={buyMutation.isLoading}
                 variation="primary"
                 size="medium"
-                aria-label={`Buy NFT ${metadata?.name || `Token #${tokenId}`} for ${ethers.utils.formatEther(listing.price)} ETH`}
               >
                 {buyMutation.isLoading ? 'Processing...' : 'Buy Now'}
               </Button>
@@ -305,7 +307,6 @@ function ArtNftCard({ nft }) {
                       placeAuctionBid([{ contractAddress, tokenId, amount }])
                     }
                     isLoading={isAuctionBidding}
-                    onCloseModal={() => setBidAmount('')}
                     nftName={metadata?.name || `Token #${tokenId}`}
                   />
                 </Modal.Window>
@@ -344,7 +345,6 @@ function ArtNftCard({ nft }) {
                       placeBid([{ contractAddress, tokenId, amount }])
                     }
                     isLoading={isBidding}
-                    onCloseModal={() => setBidAmount('')}
                     nftName={metadata?.name || `Token #${tokenId}`}
                   />
                 </Modal.Window>
@@ -352,11 +352,11 @@ function ArtNftCard({ nft }) {
             )}
           </>
         )}
-        {bids.length > 0 && (
+        {(bids || []).length > 0 && (
           <>
             <Status>Bid History:</Status>
             <BidHistory>
-              {bids.map((bid, index) => (
+              {(bids || []).map((bid, index) => (
                 <BidItem key={`${bid.bidder}-${bid.amount}-${index}`}>
                   {bid.bidder.slice(0, 6)}...{bid.bidder.slice(-4)}:{' '}
                   {formatCurrency(ethers.utils.formatEther(bid.amount), 'ETH')}
@@ -372,7 +372,6 @@ function ArtNftCard({ nft }) {
                         })
                       }
                       disabled={isAccepting}
-                      aria-label={`Accept bid of ${formatCurrency(ethers.utils.formatEther(bid.amount), 'ETH')} from ${bid.bidder.slice(0, 6)}...${bid.bidder.slice(-4)} for NFT ${metadata?.name || `Token #${tokenId}`}`}
                     >
                       Accept
                     </Button>
@@ -382,9 +381,114 @@ function ArtNftCard({ nft }) {
             </BidHistory>
           </>
         )}
+        <Button
+          onClick={() => burn(tokenId)}
+          disabled={isBurning}
+          variation="danger"
+        >
+          {isBurning ? 'Burning...' : 'Burn NFT'}
+        </Button>
+        <Modal>
+          <Modal.Open opens={`set-royalty-${tokenId}`}>
+            <Button variation="secondary" size="medium">
+              Set Royalty
+            </Button>
+          </Modal.Open>
+          <Modal.Window name={`set-royalty-${tokenId}`}>
+            <Form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setRoyalty({
+                  tokenId,
+                  recipient: royaltyRecipient,
+                  royaltyBps
+                });
+              }}
+              type="modal"
+            >
+              <FormRow label="Recipient">
+                <Input
+                  type="text"
+                  value={royaltyRecipient}
+                  onChange={(e) => setRoyaltyRecipient(e.target.value)}
+                  required
+                />
+              </FormRow>
+              <FormRow label="Royalty BPS">
+                <Input
+                  type="number"
+                  value={royaltyBps}
+                  onChange={(e) => setRoyaltyBps(e.target.value)}
+                  required
+                />
+              </FormRow>
+              <FormRow>
+                <Button variation="secondary" disabled={isSetting}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSetting}>
+                  {isSetting ? 'Setting...' : 'Set Royalty'}
+                </Button>
+              </FormRow>
+            </Form>
+          </Modal.Window>
+        </Modal>
+        <Status>Royalty Recipient: {details.royaltyRecipient}</Status>
+        <Status>Royalty BPS: {details.royaltyBps}</Status>
       </Info>
     </Card>
   );
 }
 
 export default ArtNftCard;
+/*
+import styled from 'styled-components';
+
+const Card = styled.div`
+  background: var(--color-grey-0);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition:
+    transform 0.3s,
+    box-shadow 0.3s;
+  width: 100%;
+  max-width: 300px;
+  margin: 1rem;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+  }
+`;
+
+const Image = styled.img`
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+`;
+
+const Info = styled.div`
+  padding: 1rem;
+`;
+
+const Title = styled.h3`
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-grey-800);
+  margin-bottom: 0.5rem;
+`;
+
+function ArtNftCard({ nft }) {
+  return (
+    <Card>
+      <Image src={'https://via.placeholder.com/300'} alt={'NFT'} />
+      <Info>
+        <Title>{'Token'}</Title>
+      </Info>
+    </Card>
+  );
+}
+
+export default ArtNftCard;
+*/

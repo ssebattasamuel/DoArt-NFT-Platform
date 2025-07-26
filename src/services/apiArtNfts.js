@@ -58,39 +58,38 @@ export async function batchMintNfts(nfts, { doArt, escrowListings }) {
 }
 
 export async function batchListNfts(listings, { escrowListings, doArt }) {
-  const nftContracts = listings.map(() => doArt.address);
-  const tokenIds = listings.map((l) => l.tokenId);
-  const buyers = listings.map(() => ethers.constants.AddressZero);
-  const prices = listings.map((l) =>
-    ethers.utils.parseEther(l.price.toString())
-  );
-  const minBids = listings.map((l) =>
-    ethers.utils.parseEther(l.minBid.toString())
-  );
-  const escrowAmounts = listings.map(() => ethers.utils.parseEther('0.01'));
-  const isAuctions = listings.map((l) => l.isAuction);
-  const auctionDurations = listings.map((l) =>
-    l.isAuction ? l.auctionDuration * 3600 : 0
-  );
-
-  for (const tokenId of tokenIds) {
-    const approveTx = await doArt.approve(escrowListings.address, tokenId);
-    await approveTx.wait();
-  }
-
-  const listTx = await escrowListings.batchList(
-    nftContracts,
-    tokenIds,
-    buyers,
-    prices,
-    minBids,
-    escrowAmounts,
-    isAuctions,
-    auctionDurations
-  );
-  await listTx.wait();
-
-  return tokenIds;
+  // const nftContracts = (listings || []).map(() => doArt.address);
+  // const tokenIds = (listings || []).map((l) => l.tokenId);
+  // const buyers = (listings || []).map(() => ethers.constants.AddressZero);
+  // const prices = (listings || []).map((l) =>
+  //   ethers.utils.parseEther(l.price.toString())
+  // );
+  // const minBids = (listings || []).map((l) =>
+  //   ethers.utils.parseEther(l.minBid.toString())
+  // );
+  // const escrowAmounts = (listings || []).map(() =>
+  //   ethers.utils.parseEther('0.01')
+  // );
+  // const isAuctions = (listings || []).map((l) => l.isAuction);
+  // const auctionDurations = (listings || []).map((l) =>
+  //   l.isAuction ? l.auctionDuration * 3600 : 0
+  // );
+  // for (const tokenId of tokenIds) {
+  //   const approveTx = await doArt.approve(escrowListings.address, tokenId);
+  //   await approveTx.wait();
+  // }
+  // const listTx = await escrowListings.batchList(
+  //   nftContracts,
+  //   tokenIds,
+  //   buyers,
+  //   prices,
+  //   minBids,
+  //   escrowAmounts,
+  //   isAuctions,
+  //   auctionDurations
+  // );
+  // await listTx.wait();
+  // return tokenIds;
 }
 
 export async function placeBid(
@@ -109,22 +108,23 @@ export async function placeBid(
 }
 
 export async function batchPlaceBids(bids, { escrowAuctions }) {
-  const contractAddress = bids[0].contractAddress;
-  const tokenIds = bids.map((b) => b.tokenId);
-  const amounts = bids.map((b) => ethers.utils.parseEther(b.amount.toString()));
-  const totalValue = amounts.reduce(
-    (sum, amt) => sum.add(amt),
-    ethers.BigNumber.from(0)
-  );
-
-  const tx = await escrowAuctions.batchPlaceBid(
-    contractAddress,
-    tokenIds,
-    amounts,
-    { value: totalValue }
-  );
-  await tx.wait();
-  return bids;
+  // const contractAddress = bids[0].contractAddress;
+  // const tokenIds = (bids || []).map((b) => b.tokenId);
+  // const amounts = (bids || []).map((b) =>
+  //   ethers.utils.parseEther(b.amount.toString())
+  // );
+  // const totalValue = amounts.reduce(
+  //   (sum, amt) => sum.add(amt),
+  //   ethers.BigNumber.from(0)
+  // );
+  // const tx = await escrowAuctions.batchPlaceBid(
+  //   contractAddress,
+  //   tokenIds,
+  //   amounts,
+  //   { value: totalValue }
+  // );
+  // await tx.wait();
+  // return bids;
 }
 
 export async function placeAuctionBid(
@@ -143,22 +143,23 @@ export async function placeAuctionBid(
 }
 
 export async function batchPlaceAuctionBids(bids, { escrowAuctions }) {
-  const contractAddress = bids[0].contractAddress;
-  const tokenIds = bids.map((b) => b.tokenId);
-  const amounts = bids.map((b) => ethers.utils.parseEther(b.amount.toString()));
-  const totalValue = amounts.reduce(
-    (sum, amt) => sum.add(amt),
-    ethers.BigNumber.from(0)
-  );
-
-  const tx = await escrowAuctions.batchPlaceAuctionBid(
-    contractAddress,
-    tokenIds,
-    amounts,
-    { value: totalValue }
-  );
-  await tx.wait();
-  return bids;
+  // const contractAddress = bids[0].contractAddress;
+  // const tokenIds = (bids || []).map((b) => b.tokenId);
+  // const amounts = (bids || []).map((b) =>
+  //   ethers.utils.parseEther(b.amount.toString())
+  // );
+  // const totalValue = amounts.reduce(
+  //   (sum, amt) => sum.add(amt),
+  //   ethers.BigNumber.from(0)
+  // );
+  // const tx = await escrowAuctions.batchPlaceAuctionBid(
+  //   contractAddress,
+  //   tokenIds,
+  //   amounts,
+  //   { value: totalValue }
+  // );
+  // await tx.wait();
+  // return bids;
 }
 export async function editListing(
   { contractAddress, tokenId, purchasePrice },
@@ -252,4 +253,122 @@ export async function endAuction(
   const tx = await escrowAuctions.endAuction(contractAddress, tokenId);
   await tx.wait();
   return { contractAddress, tokenId };
+}
+
+export async function burnNft(tokenId, { doArt }) {
+  const tx = await doArt.burn(tokenId);
+  await tx.wait();
+  return tokenId;
+}
+
+export async function setArtistMetadata(
+  { name, bio, portfolioUrl },
+  { doArt }
+) {
+  const tx = await doArt.setArtistMetadata(name, bio, portfolioUrl);
+  await tx.wait();
+  return { name, bio, portfolioUrl };
+}
+
+export async function getArtistMetadata(artist, { doArt }) {
+  return await doArt.getArtistMetadata(artist);
+}
+
+export async function setTokenRoyalty(
+  { tokenId, recipient, royaltyBps },
+  { doArt }
+) {
+  const tx = await doArt.setTokenRoyalty(tokenId, recipient, royaltyBps);
+  await tx.wait();
+  return { tokenId, recipient, royaltyBps };
+}
+
+export async function getTokenDetails(tokenId, { doArt }) {
+  return await doArt.getTokenDetails(tokenId);
+}
+
+export async function cancelAuction(
+  { contractAddress, tokenId },
+  { escrowAuctions }
+) {
+  const tx = await escrowAuctions.cancelAuction(contractAddress, tokenId);
+  await tx.wait();
+  return { contractAddress, tokenId };
+}
+
+export async function depositEarnest(
+  { contractAddress, tokenId, amount },
+  { escrowListings }
+) {
+  const tx = await escrowListings.depositEarnest(contractAddress, tokenId, {
+    value: amount
+  });
+  await tx.wait();
+  return { contractAddress, tokenId, amount };
+}
+
+export async function approveArtwork(
+  { contractAddress, tokenId, approved },
+  { escrowListings }
+) {
+  const tx = await escrowListings.approveArtwork(
+    contractAddress,
+    tokenId,
+    approved
+  );
+  await tx.wait();
+  return { contractAddress, tokenId, approved };
+}
+
+export async function updateListing(
+  { contractAddress, tokenId, price },
+  { escrowListings }
+) {
+  const priceWei = ethers.utils.parseEther(price.toString());
+  const tx = await escrowListings.updateListing(
+    contractAddress,
+    tokenId,
+    priceWei
+  );
+  await tx.wait();
+  return { contractAddress, tokenId, price };
+}
+
+export async function cancelSale(
+  { contractAddress, tokenId },
+  { escrowListings }
+) {
+  const tx = await escrowListings.cancelSale(contractAddress, tokenId);
+  await tx.wait();
+  return { contractAddress, tokenId };
+}
+
+export async function list(data, { escrowListings }) {
+  const tx = await escrowListings.list(
+    data.nftContract,
+    data.tokenId,
+    data.buyer,
+    data.price,
+    data.minBid,
+    data.escrowAmount,
+    data.isAuction,
+    data.auctionDuration
+  );
+  await tx.wait();
+  return data;
+}
+
+export async function batchList(data, { escrowListings }) {
+  const tx = await escrowListings.batchList(
+    data.nftContracts,
+    data.tokenIds,
+    data.buyers,
+    data.prices,
+    data.minBids,
+    data.escrowAmounts,
+    data.isAuctions,
+    data.auctionDurations
+  );
+  await tx.wait();
+  return data;
 }

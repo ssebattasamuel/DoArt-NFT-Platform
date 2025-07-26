@@ -1,17 +1,10 @@
-import {
-  cloneElement,
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState
-} from 'react';
+import { cloneElement, createContext, useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HiXMark } from 'react-icons/hi2';
 import styled from 'styled-components';
 import { useOutsideClick } from '../hooks/useOutsideClick';
 
-export const StyledModal = styled.div`
+const StyledModal = styled.div`
   position: fixed;
   top: 50%;
   left: 50%;
@@ -23,7 +16,7 @@ export const StyledModal = styled.div`
   transition: all 0.5s;
 `;
 
-export const Overlay = styled.div`
+const Overlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
@@ -35,7 +28,7 @@ export const Overlay = styled.div`
   transition: all 0.5s;
 `;
 
-export const Button = styled.button`
+const Button = styled.button`
   background: none;
   border: none;
   padding: 0.4rem;
@@ -53,9 +46,6 @@ export const Button = styled.button`
   & svg {
     width: 2.4rem;
     height: 2.4rem;
-    /* Sometimes we need both */
-    /* fill: var(--color-grey-500);
-    stroke: var(--color-grey-500); */
     color: var(--color-grey-500);
   }
 `;

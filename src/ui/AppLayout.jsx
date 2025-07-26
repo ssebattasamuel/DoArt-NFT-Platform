@@ -22,7 +22,7 @@ const Container = styled.div`
   gap: 3.2rem;
 `;
 
-function AppLayout({ account, connectWallet }) {
+function AppLayout() {
   return (
     <StyledAppLayout>
       <Header />

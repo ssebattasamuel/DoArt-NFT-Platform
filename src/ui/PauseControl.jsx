@@ -12,15 +12,15 @@ const Container = styled.div`
 `;
 
 function PauseControl() {
-  const { contracts, signer, account } = useWeb3();
+  const { contracts, account } = useWeb3();
   const { pauseContract, unpauseContract, isPausing, isPaused } = usePause();
-  const [permissions, setPermissions] = useState({}); // State to store permission checks
+  const [permissions, setPermissions] = useState({});
 
   const contractsToControl = [
     { contract: contracts.escrowListings, name: 'EscrowListings' },
     { contract: contracts.escrowAuctions, name: 'EscrowAuctions' },
     { contract: contracts.escrowLazyMinting, name: 'EscrowLazyMinting' },
-    { contract: contracts.doArtContracts, name: 'DoArt' }
+    { contract: contracts.doArt, name: 'DoArt' }
   ];
 
   const checkPermission = async (contract) => {
@@ -31,7 +31,6 @@ function PauseControl() {
     return await contract.hasRole(PAUSER_ROLE, account);
   };
 
-  // Fetch permissions for all contracts on mount
   useEffect(() => {
     const fetchPermissions = async () => {
       const results = {};
@@ -46,7 +45,7 @@ function PauseControl() {
   return (
     <Container>
       {contractsToControl
-        .filter(({ name }) => permissions[name]) // Only render contracts with permission
+        .filter(({ name }) => permissions[name])
         .map(({ contract, name }) => {
           const paused = isPaused[name] || false;
           return (
@@ -77,3 +76,18 @@ function PauseControl() {
 }
 
 export default PauseControl;
+
+/*
+import styled from 'styled-components';
+import FormRow from './FormRow';
+
+const Container = styled.div`
+  display: grid;
+  gap: 1rem;
+`;
+
+function PauseControl() {
+  return <Container></Container>;
+}
+
+export default PauseControl;*/

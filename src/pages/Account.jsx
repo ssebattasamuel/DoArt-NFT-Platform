@@ -6,8 +6,7 @@
 // import Button from '../ui/Button';
 // import { useLocalStorageState } from '../hooks/useLocalStorage';
 // import { useWeb3 } from '../hooks/useWeb3';
-// import { useUserListings } from '../hooks/useUserListings';
-// import ArtNftCard from '../ui/ArtNftCard';
+// import Spinner from '../ui/Spinner';
 
 // const ProfileContainer = styled.div`
 //   display: flex;
@@ -40,8 +39,7 @@
 // `;
 
 // function Account() {
-//   const { account, signer } = useWeb3();
-//   const { ownedNfts, userListings, userBids, isLoading } = useUserListings();
+//   const { account } = useWeb3();
 //   const [profile, setProfile] = useLocalStorageState(
 //     { username: '', bio: '' },
 //     'userProfile'
@@ -52,7 +50,6 @@
 //     setProfile({ username: e.target.username.value, bio: e.target.bio.value });
 //   };
 
-//   if (isLoading) return <Spinner />;
 //   if (!account) return <div>Please connect your wallet</div>;
 
 //   return (
@@ -86,51 +83,6 @@
 //         <Heading as="h3">Wallet Address</Heading>
 //         <p>{account}</p>
 //       </Row>
-//       <Section>
-//         <Heading as="h3">Your NFTs</Heading>
-//         <NftGrid>
-//           {ownedNfts.length > 0 ? (
-//             ownedNfts.map((nft) => (
-//               <ArtNftCard
-//                 key={`${nft.contractAddress}-${nft.tokenId}`}
-//                 nft={nft}
-//               />
-//             ))
-//           ) : (
-//             <p>No NFTs owned yet.</p>
-//           )}
-//         </NftGrid>
-//       </Section>
-//       <Section>
-//         <Heading as="h3">Your Listings</Heading>
-//         <NftGrid>
-//           {userListings.length > 0 ? (
-//             userListings.map((nft) => (
-//               <ArtNftCard
-//                 key={`${nft.contractAddress}-${nft.tokenId}`}
-//                 nft={nft}
-//               />
-//             ))
-//           ) : (
-//             <p>No active listings.</p>
-//           )}
-//         </NftGrid>
-//       </Section>
-//       <Section>
-//         <Heading as="h3">Your Bids</Heading>
-//         <NftGrid>
-//           {userBids.length > 0 ? (
-//             userBids.map((nft) => (
-//               <ArtNftCard
-//                 key={`${nft.contractAddress}-${nft.tokenId}`}
-//                 nft={nft}
-//               />
-//             ))
-//           ) : (
-//             <p>No active bids.</p>
-//           )}
-//         </NftGrid>
-//       </Section>
 //     </>
 //   );
 // }
@@ -146,6 +98,10 @@ import { useLocalStorageState } from '../hooks/useLocalStorage';
 import { useWeb3 } from '../hooks/useWeb3';
 import { useUserListings } from '../hooks/useUserListings';
 import ArtNftCard from '../ui/ArtNftCard';
+import Spinner from '../ui/Spinner';
+import { useGetArtistMetadata } from '../hooks/useGetArtistMetadata';
+import { useSetArtistMetadata } from '../hooks/useSetArtistMetadata';
+import FormRow from '../ui/FormRow';
 
 const ProfileContainer = styled.div`
   display: flex;
@@ -178,8 +134,10 @@ const Section = styled.div`
 `;
 
 function Account() {
-  const { account, signer } = useWeb3();
-  const { ownedNfts, userListings, userBids, isLoading } = useUserListings();
+  const { account } = useWeb3();
+  const { ownedNfts, userListings, userBids, isLoading: listingsLoading } = useUserListings();
+  const { metadata: artistMetadata, isLoading: metadataLoading } = useGetArtistMetadata(account);
+  const { setMetadata, isSetting } = useSetArtistMetadata();
   const [profile, setProfile] = useLocalStorageState(
     { username: '', bio: '' },
     'userProfile'
@@ -190,7 +148,16 @@ function Account() {
     setProfile({ username: e.target.username.value, bio: e.target.bio.value });
   };
 
-  if (isLoading) return <Spinner />;
+  const handleArtistMetadataUpdate = (e) => {
+    e.preventDefault();
+    setMetadata({
+      name: e.target.name.value,
+      bio: e.target.bio.value,
+      portfolioUrl: e.target.portfolioUrl.value
+    });
+  };
+
+  if (listingsLoading || metadataLoading) return <Spinner />;
   if (!account) return <div>Please connect your wallet</div>;
 
   return (
@@ -225,10 +192,28 @@ function Account() {
         <p>{account}</p>
       </Row>
       <Section>
+        <Heading as="h3">Artist Metadata</Heading>
+        <p>Name: {artistMetadata.name}</p>
+        <p>Bio: {artistMetadata.bio}</p>
+        <p>Portfolio URL: {artistMetadata.portfolioUrl}</p>
+        <ProfileForm onSubmit={handleArtistMetadataUpdate}>
+          <FormRow label="Name">
+            <Input id="name" defaultValue={artistMetadata.name} />
+          </FormRow>
+          <FormRow label="Bio">
+            <Input id="bio" defaultValue={artistMetadata.bio} />
+          </FormRow>
+          <FormRow label="Portfolio URL">
+            <Input id="portfolioUrl" defaultValue={artistMetadata.portfolioUrl} />
+          </FormRow>
+          <Button type="submit" disabled={isSetting}>Update Artist Metadata</Button>
+        </ProfileForm>
+      </Section>
+      <Section>
         <Heading as="h3">Your NFTs</Heading>
         <NftGrid>
-          {ownedNfts.length > 0 ? (
-            ownedNfts.map((nft) => (
+          {(ownedNfts || []).length > 0 ? (
+            (ownedNfts || []).map((nft) => (
               <ArtNftCard
                 key={`${nft.contractAddress}-${nft.tokenId}`}
                 nft={nft}
@@ -242,8 +227,8 @@ function Account() {
       <Section>
         <Heading as="h3">Your Listings</Heading>
         <NftGrid>
-          {userListings.length > 0 ? (
-            userListings.map((nft) => (
+          {(userListings || []).length > 0 ? (
+            (userListings || []).map((nft) => (
               <ArtNftCard
                 key={`${nft.contractAddress}-${nft.tokenId}`}
                 nft={nft}
@@ -257,8 +242,8 @@ function Account() {
       <Section>
         <Heading as="h3">Your Bids</Heading>
         <NftGrid>
-          {userBids.length > 0 ? (
-            userBids.map((nft) => (
+          {(userBids || []).length > 0 ? (
+            (userBids || []).map((nft) => (
               <ArtNftCard
                 key={`${nft.contractAddress}-${nft.tokenId}`}
                 nft={nft}
@@ -274,3 +259,4 @@ function Account() {
 }
 
 export default Account;
+

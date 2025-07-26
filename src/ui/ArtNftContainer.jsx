@@ -19,23 +19,21 @@ const Message = styled.p`
   margin-top: 2rem;
 `;
 
-const ArtNftContainer = ({ provider, signer }) => {
+const ArtNftContainer = () => {
   const { isLoading, artNfts, error } = useNfts();
+
+  // Guard against undefined artNfts
+  const safeArtNfts = artNfts || [];
 
   if (isLoading) return <Spinner />;
   if (error) return <Message>Error: {error.message}</Message>;
-  if (!artNfts || artNfts.length === 0)
+  if (safeArtNfts.length === 0)
     return <Message>No NFTs available. Mint one to get started!</Message>;
 
   return (
     <Container>
-      {artNfts.map((nft) => (
-        <ArtNftCard
-          key={`${nft.contractAddress}-${nft.tokenId}`}
-          nft={nft}
-          provider={provider}
-          signer={signer}
-        />
+      {safeArtNfts.map((nft) => (
+        <ArtNftCard key={`${nft.contractAddress}-${nft.tokenId}`} nft={nft} />
       ))}
     </Container>
   );

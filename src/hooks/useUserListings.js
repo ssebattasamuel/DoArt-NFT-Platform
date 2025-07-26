@@ -44,8 +44,8 @@ export function useUserListings() {
     }
 
     // Fetch user listings and bids
-    const listings = await escrowStorage.getListings();
-    const auctions = await escrowStorage.getAuctions();
+    const listings = (await escrowStorage.getAllListings()) || [];
+    const auctions = (await escrowStorage.getAllAuctions()) || [];
     const userListings = [];
     const userBids = [];
 
@@ -62,43 +62,43 @@ export function useUserListings() {
         metadata = { name: `Token #${tokenId}`, image: '', description: '' };
       }
 
-      const bids = await escrowStorage.getBids(contractAddress, tokenId);
+      const bids = (await escrowStorage.bids(contractAddress, tokenId)) || [];
       const auction = auctions.find(
         (a) =>
           a.contractAddress === contractAddress &&
           a.tokenId.toString() === tokenId
       );
 
-      const nftData = {
-        contractAddress,
-        tokenId,
-        listing: {
-          isListed: listing.isListed,
-          seller: listing.seller,
-          buyer: listing.buyer,
-          price: listing.price,
-          minBid: listing.minBid,
-          escrowAmount: listing.escrowAmount,
-          viewingPeriodEnd: listing.viewingPeriodEnd.toNumber(),
-          isAuction: listing.isAuction,
-          uri
-        },
-        auction: auction
-          ? {
-              isActive: auction.isActive,
-              endTime: auction.endTime.toNumber(),
-              minBid: auction.minBid,
-              minIncrement: auction.minIncrement,
-              highestBidder: auction.highestBidder,
-              highestBid: auction.highestBid
-            }
-          : null,
-        bids: bids.map((bid) => ({
-          bidder: bid.bidder,
-          amount: bid.amount
-        })),
-        metadata
-      };
+      // const nftData = {
+      //   contractAddress,
+      //   tokenId,
+      //   listing: {
+      //     isListed: listing.isListed,
+      //     seller: listing.seller,
+      //     buyer: listing.buyer,
+      //     price: listing.price,
+      //     minBid: listing.minBid,
+      //     escrowAmount: listing.escrowAmount,
+      //     viewingPeriodEnd: listing.viewingPeriodEnd.toNumber(),
+      //     isAuction: listing.isAuction,
+      //     uri
+      //   },
+      //   auction: auction
+      //     ? {
+      //         isActive: auction.isActive,
+      //         endTime: auction.endTime.toNumber(),
+      //         minBid: auction.minBid,
+      //         minIncrement: auction.minIncrement,
+      //         highestBidder: auction.highestBidder,
+      //         highestBid: auction.highestBid
+      //       }
+      //     : null,
+      //   bids: bids.map((bid) => ({
+      //     bidder: bid.bidder,
+      //     amount: bid.amount
+      //   })),
+      //   metadata
+      // };
 
       if (listing.seller.toLowerCase() === account.toLowerCase()) {
         userListings.push(nftData);
