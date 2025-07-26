@@ -11,7 +11,7 @@ const Img = styled.img`
 function Logo() {
   return (
     <StyledLogo>
-      <Img src="/DoArt Logo.png" alt="Logo" />
+      <Img src="/DoArt-logo.png" alt="Logo" />
     </StyledLogo>
   );
 }
