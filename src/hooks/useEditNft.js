@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { editListing } from '../services/apiArtNfts';
-import { useWeb3 } from './useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useEditNft() {
   const queryClient = useQueryClient();
-  const { contracts } = useWeb3();
+  const { contracts } = useWeb3Context();
 
   const { mutate: editNft, isLoading: isEditing } = useMutation({
     mutationFn: ({ newNftData: { purchasePrice }, id, contractAddress }) =>

@@ -1,13 +1,12 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import styled from 'styled-components';
 import Heading from '../ui/Heading';
 import Row from '../ui/Row';
 import Spinner from '../ui/Spinner';
 import ArtNftContainer from '../ui/ArtNftContainer';
 import AddNft from '../ui/AddNft';
-
 import { useNfts } from '../hooks/useNfts';
-
 import Input from '../ui/Input';
 
 const FilterContainer = styled.div`
@@ -23,10 +22,10 @@ const FilterSelect = styled.select`
 
 function Gallery() {
   const { isLoading, artNfts, error } = useNfts();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Guard against undefined artNfts
   const safeArtNfts = artNfts || [];
 
   const filteredNfts = safeArtNfts.filter((nft) => {
@@ -41,6 +40,15 @@ function Gallery() {
     const matchesSearch =
       nft?.metadata?.name?.toLowerCase()?.includes(search.toLowerCase()) ||
       false;
+    console.log('Gallery: Filtering NFT', {
+      tokenId: nft.tokenId,
+      isListed: nft?.listing?.isListed,
+      isAuction: nft?.listing?.isAuction,
+      isActive: nft?.auction?.isActive,
+      name: nft?.metadata?.name,
+      matchesFilter,
+      matchesSearch
+    });
     return matchesFilter && matchesSearch;
   });
 
@@ -77,43 +85,3 @@ function Gallery() {
 }
 
 export default Gallery;
-/*
-import styled from 'styled-components';
-import Heading from '../ui/Heading';
-import Row from '../ui/Row';
-import AddNft from '../ui/AddNft';
-import Input from '../ui/Input';
-
-const FilterContainer = styled.div`
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-`;
-
-const FilterSelect = styled.select`
-  padding: 0.5rem;
-  border-radius: 4px;
-`;
-
-function Gallery() {
-  return (
-    <>
-      <Row type="horizontal">
-        <Heading as="h1">All Art</Heading>
-        <FilterContainer>
-          <FilterSelect>
-            <option value="all">All</option>
-            <option value="listed">Listed</option>
-            <option value="auction">Auctions</option>
-          </FilterSelect>
-          <Input type="text" placeholder="Search by name..." />
-        </FilterContainer>
-      </Row>
-      <Row>
-        <AddNft />
-      </Row>
-    </>
-  );
-}
-
-export default Gallery;*/

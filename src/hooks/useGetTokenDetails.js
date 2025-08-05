@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { getTokenDetails } from '../services/apiArtNfts';
-import { useWeb3 } from './useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useGetTokenDetails(tokenId) {
-  const { contracts } = useWeb3();
+  const { contracts } = useWeb3Context();
 
   const { data: details, isLoading } = useQuery({
     queryKey: ['tokenDetails', tokenId],

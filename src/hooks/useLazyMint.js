@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLazyMintVoucher, redeemLazyMint } from '../services/apiArtNfts';
 import { toast } from 'react-hot-toast';
-import { useWeb3 } from './useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useLazyMint() {
   const queryClient = useQueryClient();
-  const { contracts, signer } = useWeb3();
+  const { contracts, signer } = useWeb3Context();
 
   const { mutate: createLazyMint, isLoading: isCreating } = useMutation({
     mutationFn: (data) => createLazyMintVoucher(data, { ...contracts, signer }),

@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { batchPlaceAuctionBids } from '../services/apiArtNfts';
 import { toast } from 'react-hot-toast';
-import { useWeb3 } from './useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useAuctionBid() {
   const queryClient = useQueryClient();
-  const { contracts } = useWeb3();
+  const { contracts } = useWeb3Context();
 
   const { mutate: placeAuctionBid, isLoading: isAuctionBidding } = useMutation({
     mutationFn: (bids) => batchPlaceAuctionBids(bids, contracts),

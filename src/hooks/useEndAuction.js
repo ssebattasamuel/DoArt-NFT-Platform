@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { endAuction } from '../services/apiArtNfts';
 import { toast } from 'react-hot-toast';
-import { useWeb3 } from './useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useEndAuction() {
   const queryClient = useQueryClient();
-  const { contracts } = useWeb3();
+  const { contracts } = useWeb3Context();
 
   const { mutate: endAuction, isLoading: isEnding } = useMutation({
     mutationFn: ({ contractAddress, tokenId }) =>

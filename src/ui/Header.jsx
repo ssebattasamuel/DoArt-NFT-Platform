@@ -2,7 +2,7 @@ import styled from 'styled-components';
 import { NavLink } from 'react-router-dom';
 import Button from './Button';
 import Logo from './Logo';
-import { useWeb3 } from '../hooks/useWeb3';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 import {
   HiOutlineHome,
   HiMiniBanknotes,
@@ -41,7 +41,12 @@ const WalletInfo = styled.div`
 `;
 
 function Header() {
-  const { account, connectWallet } = useWeb3();
+  const { account, connectWallet, isLoading, error } = useWeb3Context();
+
+  const handleConnectWallet = () => {
+    console.log('Header: Connect Wallet button clicked');
+    connectWallet();
+  };
 
   return (
     <StyledHeader>
@@ -109,10 +114,17 @@ function Header() {
         </NavItem>
       </NavList>
       <WalletInfo>
-        {account ? (
+        {isLoading ? (
+          'Loading...'
+        ) : error ? (
+          <>
+            <span style={{ color: 'red' }}>Error: {error}</span>
+            <Button onClick={handleConnectWallet}>Retry Connection</Button>
+          </>
+        ) : account ? (
           `Connected: ${account.slice(0, 6)}...${account.slice(-4)}`
         ) : (
-          <Button onClick={connectWallet}>Connect Wallet</Button>
+          <Button onClick={handleConnectWallet}>Connect Wallet</Button>
         )}
       </WalletInfo>
     </StyledHeader>

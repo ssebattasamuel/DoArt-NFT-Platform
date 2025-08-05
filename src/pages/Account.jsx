@@ -1,93 +1,3 @@
-// import { useState } from 'react';
-// import styled from 'styled-components';
-// import Heading from '../ui/Heading';
-// import Row from '../ui/Row';
-// import Input from '../ui/Input';
-// import Button from '../ui/Button';
-// import { useLocalStorageState } from '../hooks/useLocalStorage';
-// import { useWeb3 } from '../hooks/useWeb3';
-// import Spinner from '../ui/Spinner';
-
-// const ProfileContainer = styled.div`
-//   display: flex;
-//   gap: 2rem;
-//   margin-bottom: 2rem;
-// `;
-
-// const ProfileImage = styled.img`
-//   width: 150px;
-//   height: 150px;
-//   border-radius: 50%;
-//   object-fit: cover;
-// `;
-
-// const ProfileForm = styled.form`
-//   display: flex;
-//   flex-direction: column;
-//   gap: 1.5rem;
-//   max-width: 400px;
-// `;
-
-// const NftGrid = styled.div`
-//   display: grid;
-//   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-//   gap: 2rem;
-// `;
-
-// const Section = styled.div`
-//   margin-bottom: 3rem;
-// `;
-
-// function Account() {
-//   const { account } = useWeb3();
-//   const [profile, setProfile] = useLocalStorageState(
-//     { username: '', bio: '' },
-//     'userProfile'
-//   );
-
-//   const handleProfileUpdate = (e) => {
-//     e.preventDefault();
-//     setProfile({ username: e.target.username.value, bio: e.target.bio.value });
-//   };
-
-//   if (!account) return <div>Please connect your wallet</div>;
-
-//   return (
-//     <>
-//       <Heading as="h1">Your Account</Heading>
-//       <Row>
-//         <ProfileContainer>
-//           <ProfileImage src="/default-user.jpg" alt="Profile" />
-//           <ProfileForm onSubmit={handleProfileUpdate}>
-//             <div>
-//               <label htmlFor="username">Username</label>
-//               <Input
-//                 id="username"
-//                 defaultValue={profile.username}
-//                 placeholder="Enter username"
-//               />
-//             </div>
-//             <div>
-//               <label htmlFor="bio">Bio</label>
-//               <Input
-//                 id="bio"
-//                 defaultValue={profile.bio}
-//                 placeholder="Tell us about yourself"
-//               />
-//             </div>
-//             <Button type="submit">Update Profile</Button>
-//           </ProfileForm>
-//         </ProfileContainer>
-//       </Row>
-//       <Row>
-//         <Heading as="h3">Wallet Address</Heading>
-//         <p>{account}</p>
-//       </Row>
-//     </>
-//   );
-// }
-
-// export default Account;
 import { useState } from 'react';
 import styled from 'styled-components';
 import Heading from '../ui/Heading';
@@ -135,8 +45,14 @@ const Section = styled.div`
 
 function Account() {
   const { account } = useWeb3();
-  const { ownedNfts, userListings, userBids, isLoading: listingsLoading } = useUserListings();
-  const { metadata: artistMetadata, isLoading: metadataLoading } = useGetArtistMetadata(account);
+  const {
+    ownedNfts,
+    userListings,
+    userBids,
+    isLoading: listingsLoading
+  } = useUserListings();
+  const { metadata: artistMetadata, isLoading: metadataLoading } =
+    useGetArtistMetadata(account);
   const { setMetadata, isSetting } = useSetArtistMetadata();
   const [profile, setProfile] = useLocalStorageState(
     { username: '', bio: '' },
@@ -204,9 +120,14 @@ function Account() {
             <Input id="bio" defaultValue={artistMetadata.bio} />
           </FormRow>
           <FormRow label="Portfolio URL">
-            <Input id="portfolioUrl" defaultValue={artistMetadata.portfolioUrl} />
+            <Input
+              id="portfolioUrl"
+              defaultValue={artistMetadata.portfolioUrl}
+            />
           </FormRow>
-          <Button type="submit" disabled={isSetting}>Update Artist Metadata</Button>
+          <Button type="submit" disabled={isSetting}>
+            Update Artist Metadata
+          </Button>
         </ProfileForm>
       </Section>
       <Section>
@@ -259,4 +180,3 @@ function Account() {
 }
 
 export default Account;
-

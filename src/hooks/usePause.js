@@ -1,38 +1,80 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { pauseContract, unpauseContract } from '../services/apiArtNfts';
-import { useWeb3 } from './useWeb3';
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useWeb3Context } from '../context/Web3Context.jsx';
 import { toast } from 'react-hot-toast';
+import { ethers } from 'ethers';
 
 export function usePause() {
-  const { contracts } = useWeb3();
+  const { account, contracts } = useWeb3Context();
+  const [isPaused, setIsPaused] = useState(false);
+  const [isPauser, setIsPauser] = useState(false);
 
-  const { data: isPaused, refetch } = useQuery({
-    queryKey: ['contractStatus'],
+  const { data: paused, isLoading: isLoadingPaused } = useQuery({
+    queryKey: ['paused'],
     queryFn: async () => {
-      const statusMap = {};
-      for (const [name, contract] of Object.entries(contracts)) {
-        try {
-          statusMap[name] = await contract.paused();
-        } catch {
-          statusMap[name] = false;
-        }
-      }
-      return statusMap;
+      if (!contracts.doArt) throw new Error('Contract not initialized');
+      return await contracts.doArt.paused();
     },
-    enabled: !!contracts
+    enabled: !!contracts.doArt,
+    onError: (err) => {
+      console.error('Paused query error:', err);
+      toast.error(`Failed to check pause status: ${err.message}`);
+    }
   });
 
-  const { mutate: pauseContract, isLoading: isPausing } = useMutation({
-    mutationFn: ({ contract, name }) => pauseContract(contract, name),
-    onSuccess: () => refetch(),
-    onError: (err) => toast.error(`Failed to pause ${name}: ${err.message}`)
+  const { data: hasPauserRole, isLoading: isLoadingRole } = useQuery({
+    queryKey: ['pauserRole', account],
+    queryFn: async () => {
+      if (!account) throw new Error('No wallet connected');
+      if (!contracts.doArt) throw new Error('Contract not initialized');
+      return await contracts.doArt.hasRole(
+        ethers.utils.keccak256(ethers.utils.toUtf8Bytes('PAUSER_ROLE')),
+        account
+      );
+    },
+    enabled: !!account && !!contracts.doArt,
+    onError: (err) => {
+      console.error('Pauser role query error:', err);
+      toast.error(`Failed to check pauser role: ${err.message}`);
+    }
   });
 
-  const { mutate: unpauseContract } = useMutation({
-    mutationFn: ({ contract, name }) => unpauseContract(contract, name),
-    onSuccess: () => refetch(),
-    onError: (err) => toast.error(`Failed to unpause ${name}: ${err.message}`)
-  });
+  useEffect(() => {
+    if (paused !== undefined) setIsPaused(paused);
+    if (hasPauserRole !== undefined) setIsPauser(hasPauserRole);
+  }, [paused, hasPauserRole]);
 
-  return { pauseContract, unpauseContract, isPausing, isPaused };
+  const pause = async () => {
+    if (!account) throw new Error('No wallet connected');
+    try {
+      const tx = await contracts.doArt.pause();
+      await tx.wait();
+      setIsPaused(true);
+      toast.success('Contract paused');
+    } catch (err) {
+      console.error('Pause error:', err);
+      toast.error(`Failed to pause contract: ${err.message}`);
+    }
+  };
+
+  const unpause = async () => {
+    if (!account) throw new Error('No wallet connected');
+    try {
+      const tx = await contracts.doArt.unpause();
+      await tx.wait();
+      setIsPaused(false);
+      toast.success('Contract unpaused');
+    } catch (err) {
+      console.error('Unpause error:', err);
+      toast.error(`Failed to unpause contract: ${err.message}`);
+    }
+  };
+
+  return {
+    isPaused,
+    isPauser,
+    pause,
+    unpause,
+    isLoading: isLoadingPaused || isLoadingRole
+  };
 }
