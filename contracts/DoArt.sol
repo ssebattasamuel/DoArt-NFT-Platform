@@ -171,6 +171,7 @@ contract DoArt is ERC721URIStorage, ERC721Royalty, AccessControl, Pausable {
         require(_isApprovedOrOwner(msg.sender, tokenId), "Caller is not owner nor approved");
 
         _burn(tokenId);
+        _tokenIds.decrement();
         emit TokenBurned(tokenId);
     }
 

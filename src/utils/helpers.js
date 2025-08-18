@@ -18,5 +18,13 @@ export const getToday = function (options = {}) {
   return today.toISOString();
 };
 
-export const formatCurrency = (value, currency = 'USD') =>
-  new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
+export const formatCurrency = (value, currency = 'USD') => {
+  if (currency === 'ETH') {
+    const num = Number(value);
+    const decimals = num < 0.01 ? 8 : num < 1 ? 4 : 2;
+    return `${num.toFixed(decimals)} ETH`;
+  }
+  return new Intl.NumberFormat('en', { style: 'currency', currency }).format(
+    value
+  );
+};

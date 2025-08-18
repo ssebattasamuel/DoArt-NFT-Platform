@@ -1,91 +1,52 @@
 // import { useQuery } from '@tanstack/react-query';
-// import { ethers } from 'ethers';
-// import { useWeb3 } from './useWeb3';
 // import { toast } from 'react-hot-toast';
+// import { getNfts } from '../services/apiArtNfts';
+// import { useWeb3Context } from '../context/Web3Context.jsx';
 
 // export function useNfts() {
-//   const { contracts, provider } = useWeb3();
-
-//   const fetchNfts = async () => {
-//     if (!provider || !contracts.escrowStorage || !contracts.doArt) {
-//       throw new Error('Contracts not initialized');
-//     }
-
-//     const listings = (await contracts.escrowStorage.getAllListings()) || [];
-//     const auctions = (await contracts.escrowStorage.getAllAuctions()) || [];
-
-//     const nfts = await Promise.all(
-//       listings.map(async (listing) => {
-//         const tokenId = listing.tokenId.toString();
-//         const contractAddress = listing.nftContract;
-//         let uri, metadata;
-//         try {
-//           uri = await contracts.doArt.tokenURI(tokenId);
-//           const response = await fetch(
-//             uri.replace('ipfs://', 'https://ipfs.io/ipfs/')
-//           );
-//           metadata = await response.json();
-//         } catch {
-//           metadata = { name: `Token #${tokenId}`, image: '', description: '' };
-//         }
-
-//         const bids =
-//           (await contracts.escrowStorage.bids(contractAddress, tokenId)) || [];
-//         const auction = auctions.find(
-//           (a) =>
-//             a.contractAddress === contractAddress &&
-//             a.tokenId.toString() === tokenId
-//         );
-
-//         return {
-//           contractAddress,
-//           tokenId,
-//           listing: {
-//             isListed: listing.isListed,
-//             seller: listing.seller,
-//             buyer: listing.buyer,
-//             price: listing.price,
-//             minBid: listing.minBid,
-//             escrowAmount: listing.escrowAmount,
-//             viewingPeriodEnd: listing.viewingPeriodEnd.toNumber(),
-//             isAuction: listing.isAuction,
-//             uri
-//           },
-//           auction: auction
-//             ? {
-//                 isActive: auction.isActive,
-//                 endTime: auction.endTime.toNumber(),
-//                 minBid: auction.minBid,
-//                 minIncrement: auction.minIncrement,
-//                 highestBidder: auction.highestBidder,
-//                 highestBid: auction.highestBid
-//               }
-//             : null,
-//           bids: bids.map((bid) => ({
-//             bidder: bid.bidder,
-//             amount: bid.amount
-//           })),
-//           metadata
-//         };
-//       })
-//     );
-
-//     return nfts;
-//   };
+//   const context = useWeb3Context();
+//   const {
+//     contracts = {},
+//     account,
+//     isLoading: isWeb3Loading,
+//     error: web3Error
+//   } = context || {};
 
 //   const {
 //     data: artNfts,
-//     isLoading,
-//     error
+//     isLoading: isNftsLoading,
+//     error: nftsError
 //   } = useQuery({
-//     queryKey: ['artNfts'],
-//     queryFn: fetchNfts,
-//     enabled: !!provider && !!contracts.escrowStorage && !!contracts.doArt,
-//     onError: (err) => toast.error(`Failed to fetch NFTs: ${err.message}`)
+//     queryKey: ['artNfts', account],
+//     queryFn: async () => {
+//       console.log('useNfts: Fetching NFTs');
+//       const result = await getNfts({
+//         escrowStorage: contracts.escrowStorage,
+//         doArt: contracts.doArt
+//       });
+//       console.log('useNfts: Fetched NFTs:', result);
+//       return result;
+//     },
+//     enabled:
+//       !!contracts.escrowStorage &&
+//       !!contracts.doArt &&
+//       !!account &&
+//       !isWeb3Loading,
+//     onError: (err) => toast.error(`Failed to fetch NFTs: ${err.message}`),
+//     retry: 0,
+//     refetchOnWindowFocus: false,
+//     refetchInterval: false,
+//     staleTime: 0,
+//     cacheTime: 0 // No caching
 //   });
 
-//   return { isLoading, error, artNfts: artNfts || [] };
+//   return {
+//     isLoading: isWeb3Loading || isNftsLoading,
+//     error: web3Error || nftsError,
+//     artNfts: artNfts || []
+//   };
 // }
+
 // src/hooks/useNfts.js
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -93,18 +54,45 @@ import { getNfts } from '../services/apiArtNfts';
 import { useWeb3Context } from '../context/Web3Context.jsx';
 
 export function useNfts() {
-  const { contracts, account } = useWeb3Context();
+  const context = useWeb3Context();
+  const {
+    contracts = {},
+    account,
+    isLoading: isWeb3Loading,
+    error: web3Error
+  } = context || {};
 
   const {
     data: artNfts,
-    isLoading,
-    error
+    isLoading: isNftsLoading,
+    error: nftsError
   } = useQuery({
-    queryKey: ['artNfts', account], // Include account to refetch on account change
-    queryFn: () => getNfts({ escrowStorage: contracts.escrowStorage }),
-    enabled: !!contracts.escrowStorage && !!account, // Only fetch if contracts and account are ready
-    onError: (err) => toast.error(`Failed to fetch NFTs: ${err.message}`)
+    queryKey: ['artNfts', account],
+    queryFn: async () => {
+      console.log('useNfts: Fetching NFTs');
+      const result = await getNfts({
+        escrowStorage: contracts.escrowStorage,
+        doArt: contracts.doArt
+      });
+      console.log('useNfts: Fetched NFTs:', result);
+      return result;
+    },
+    enabled:
+      !!contracts.escrowStorage &&
+      !!contracts.doArt &&
+      !!account &&
+      !isWeb3Loading,
+    onError: (err) => toast.error(`Failed to fetch NFTs: ${err.message}`),
+    retry: 0,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+    staleTime: 0,
+    cacheTime: 0
   });
 
-  return { isLoading, error, artNfts: artNfts || [] };
+  return {
+    isLoading: isWeb3Loading || isNftsLoading,
+    error: web3Error || nftsError,
+    artNfts: artNfts || []
+  };
 }

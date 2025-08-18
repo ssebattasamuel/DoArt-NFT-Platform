@@ -1,6 +1,8 @@
+// src/ui/AppLayout.jsx
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import styled from 'styled-components';
+import Modal from './Modal'; // Add import
 
 const Main = styled.main`
   background-color: var(--color-grey-50);
@@ -23,12 +25,15 @@ const Container = styled.div`
 `;
 
 function AppLayout() {
+  console.log('AppLayout rendered');
   return (
     <StyledAppLayout>
       <Header />
       <Main>
         <Container>
-          <Outlet />
+          <Modal>
+            <Outlet />
+          </Modal>
         </Container>
       </Main>
     </StyledAppLayout>

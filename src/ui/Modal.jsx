@@ -13,7 +13,14 @@
 //   border-radius: var(--border-radius-lg);
 //   box-shadow: var(--shadow-lg);
 //   padding: 3.2rem 4rem;
-//   transition: all 0.5s;
+//   max-height: 90vh;
+//   overflow-y: auto;
+//   max-width: 90vw;
+//   width: 80rem;
+//   @media (max-width: 600px) {
+//     width: 95vw;
+//     padding: 2rem;
+//   }
 // `;
 
 // const Overlay = styled.div`
@@ -74,7 +81,7 @@
 //   if (name !== openName) return null;
 //   return createPortal(
 //     <Overlay>
-//       <StyledModal ref={ref}>
+//       <StyledModal ref={ref} key={name}>
 //         <Button onClick={close}>
 //           <HiXMark />
 //         </Button>
@@ -84,10 +91,12 @@
 //     document.body
 //   );
 // }
+
 // Modal.Open = Open;
 // Modal.Window = Window;
 
 // export default Modal;
+// src/ui/Modal.jsx
 import { cloneElement, createContext, useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { HiXMark } from 'react-icons/hi2';
@@ -150,6 +159,7 @@ const Button = styled.button`
 const ModalContext = createContext();
 
 function Modal({ children }) {
+  console.log('Modal rendered'); // Debug render
   const [openName, setOpenName] = useState('');
   const close = () => setOpenName('');
   const open = setOpenName;
@@ -169,9 +179,10 @@ function Window({ children, name }) {
   const { openName, close } = useContext(ModalContext);
   const ref = useOutsideClick(close);
   if (name !== openName) return null;
+  console.log(`Modal Window rendered: ${name}`); // Debug window render
   return createPortal(
     <Overlay>
-      <StyledModal ref={ref}>
+      <StyledModal ref={ref} key={name}>
         <Button onClick={close}>
           <HiXMark />
         </Button>

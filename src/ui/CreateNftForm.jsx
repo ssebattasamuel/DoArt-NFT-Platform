@@ -1,5 +1,5 @@
 // import { useForm } from 'react-hook-form';
-// import { useState, useEffect } from 'react';
+// import { useState, useEffect, useCallback, useRef } from 'react';
 // import styled from 'styled-components';
 // import Button from './Button';
 // import FileInput from './FileInput';
@@ -13,8 +13,14 @@
 // import { useEditNft } from '../hooks/useEditNft';
 // import { useWeb3Context } from '../context/Web3Context.jsx';
 // import { toast } from 'react-hot-toast';
-// import { convertUsdToEth, estimateGasCostInUsd } from '../utils/priceConverter';
+// import {
+//   convertUsdToEth,
+//   estimateGasCostInUsd,
+//   getEthPriceInUsd
+// } from '../utils/priceConverter';
 // import { ethers } from 'ethers';
+
+// let globalSubmitLock = false;
 
 // const StyledForm = styled(Form)`
 //   max-width: 600px;
@@ -30,13 +36,16 @@
 //   const { isCreating, createNft } = useCreateNft();
 //   const { isEditing, editNft } = useEditNft();
 //   const {
-//     contracts,
+//     contracts = {},
 //     account,
 //     error: web3Error,
 //     isLoading,
 //     provider
 //   } = useWeb3Context();
 //   const isWorking = isCreating || isEditing;
+//   const [isSubmitting, setIsSubmitting] = useState(false);
+//   const isSubmittedRef = useRef(false);
+//   const submitTimeoutRef = useRef(null);
 
 //   const {
 //     id: editId,
@@ -56,24 +65,29 @@
 //   const [usdPrice, setUsdPrice] = useState('');
 //   const [gasEstimate, setGasEstimate] = useState('Calculating...');
 //   const [isConverting, setIsConverting] = useState(false);
-//   const priceValue = watch('purchasePrice');
+//   const purchasePriceValue = watch('purchasePrice');
 
-//   // Validate price with debounce
+//   useEffect(() => {
+//     console.log('CreateNftForm re-rendered');
+//     return () => console.log('CreateNftForm unmounted');
+//   }, []);
+
 //   useEffect(() => {
 //     let timeout;
 //     const validatePrice = () => {
-//       console.log(`CreateNftForm: Validating price, value=${priceValue}`);
-//       if (priceValue && Number(priceValue) <= 0) {
+//       console.log(
+//         `CreateNftForm: Validating price, value=${purchasePriceValue}`
+//       );
+//       if (purchasePriceValue && Number(purchasePriceValue) <= 0) {
 //         toast.error('Price must be positive', { id: 'price-error' });
 //       }
 //     };
-//     if (priceValue) {
-//       timeout = setTimeout(validatePrice, 500); // Debounce validation
+//     if (purchasePriceValue !== undefined && purchasePriceValue !== '') {
+//       timeout = setTimeout(validatePrice, 500);
 //     }
 //     return () => clearTimeout(timeout);
-//   }, [priceValue]);
+//   }, [purchasePriceValue]);
 
-//   // Estimate gas cost
 //   useEffect(() => {
 //     const fetchGasEstimate = async () => {
 //       try {
@@ -87,72 +101,142 @@
 //     if (provider) fetchGasEstimate();
 //   }, [provider]);
 
-//   // Handle price conversion
 //   useEffect(() => {
 //     let timeout;
 //     const convertPrice = async () => {
 //       setIsConverting(true);
 //       try {
-//         if (useUsd && usdPrice) {
-//           const { ethAmount } = await convertUsdToEth(usdPrice);
+//         if (useUsd && purchasePriceValue) {
+//           const { ethAmount } = await convertUsdToEth(purchasePriceValue);
 //           setEthPrice(ethAmount);
-//         } else if (!useUsd && ethPrice) {
+//           setUsdPrice(purchasePriceValue);
+//         } else if (!useUsd && purchasePriceValue) {
 //           const ethPriceInUsd = await getEthPriceInUsd();
-//           setUsdPrice((Number(ethPrice) * ethPriceInUsd).toFixed(2));
+//           setUsdPrice((Number(purchasePriceValue) * ethPriceInUsd).toFixed(2));
+//           setEthPrice(purchasePriceValue);
+//         } else {
+//           setEthPrice('');
+//           setUsdPrice('');
 //         }
 //       } catch (error) {
-//         toast.error('Failed to convert price', { id: 'convert-error' });
+//         console.error('Conversion error:', error);
+//         setEthPrice('');
+//         toast.error('USD to ETH conversion failed. Please use ETH price.', {
+//           id: 'convert-error'
+//         });
 //       } finally {
 //         setIsConverting(false);
 //       }
 //     };
 //     timeout = setTimeout(convertPrice, 500);
 //     return () => clearTimeout(timeout);
-//   }, [useUsd, usdPrice, ethPrice]);
+//   }, [useUsd, purchasePriceValue]);
 
-//   async function onSubmit(data) {
-//     const image = typeof data.image === 'string' ? data.image : data.image[0];
-//     const priceField = useUsd ? usdPrice : ethPrice;
+//   const onSubmit = useCallback(
+//     async (data) => {
+//       console.log('onSubmit called');
+//       if (isSubmittedRef.current || globalSubmitLock) {
+//         console.log('Submit blocked - already processing');
+//         return;
+//       }
+//       isSubmittedRef.current = true;
+//       globalSubmitLock = true;
+//       setIsSubmitting(true);
 
-//     try {
-//       if (isEditSession) {
-//         await editNft(
-//           {
-//             newNftData: { ...data, purchasePrice: priceField },
-//             id: editId,
-//             contractAddress: editContractAddress || contracts?.doArt?.address
-//           },
-//           {
-//             onSuccess: () => {
-//               reset();
-//               onCloseModal?.();
-//               toast.success(`NFT updated for $${usdPrice} (~${ethPrice} ETH)`);
+//       try {
+//         const image =
+//           typeof data.image === 'string' ? data.image : data.image[0];
+//         const priceField = useUsd ? ethPrice : data.purchasePrice;
+//         if (useUsd && !ethPrice) {
+//           toast.error(
+//             'Cannot submit: USD to ETH conversion failed. Please use ETH price.',
+//             {
+//               id: 'submit-error'
 //             }
-//           }
-//         );
-//       } else {
-//         await createNft(
-//           {
+//           );
+//           return;
+//         }
+//         if (!priceField || Number(priceField) <= 0) {
+//           toast.error('Valid positive ETH equivalent price is required', {
+//             id: 'price-error'
+//           });
+//           return;
+//         }
+
+//         console.log('Submitting with priceField:', priceField);
+//         if (isEditSession) {
+//           await editNft(
+//             {
+//               newNftData: { ...data, purchasePrice: priceField },
+//               id: editId,
+//               contractAddress: editContractAddress || contracts?.doArt?.address
+//             },
+//             {
+//               onSuccess: () => {
+//                 reset();
+//                 onCloseModal?.();
+//                 toast.success(
+//                   `NFT updated for $${usdPrice} (~${ethPrice} ETH)`,
+//                   {
+//                     id: 'edit-success'
+//                   }
+//                 );
+//               },
+//               onError: (err) =>
+//                 toast.error(`Failed to update NFT: ${err.message}`, {
+//                   id: 'edit-error'
+//                 })
+//             }
+//           );
+//         } else {
+//           await createNft({
 //             ...data,
 //             image,
 //             purchasePrice: priceField,
 //             isUsd: useUsd,
 //             royaltyBps: data.royaltyBps || 500
-//           },
-//           {
-//             onSuccess: () => {
-//               reset();
-//               onCloseModal?.();
-//               toast.success(`NFT minted for $${usdPrice} (~${ethPrice} ETH)`);
-//             },
-//             onError: (err) => toast.error(`Failed to mint NFT: ${err.message}`)
-//           }
-//         );
+//           });
+//         }
+//       } catch (err) {
+//         console.error('Transaction error:', err);
+//         toast.error(`Transaction failed: ${err.message}`, {
+//           id: 'transaction-error'
+//         });
+//       } finally {
+//         isSubmittedRef.current = false;
+//         globalSubmitLock = false;
+//         setIsSubmitting(false);
+//         onCloseModal?.();
 //       }
-//     } catch (err) {
-//       toast.error(`Transaction failed: ${err.message}`);
-//     }
-//   }
+//     },
+//     [
+//       useUsd,
+//       ethPrice,
+//       usdPrice,
+//       createNft,
+//       editNft,
+//       isEditSession,
+//       editId,
+//       editContractAddress,
+//       contracts,
+//       onCloseModal,
+//       reset
+//     ]
+//   );
+
+//   const debouncedSubmit = useCallback(
+//     (data) => {
+//       if (submitTimeoutRef.current || globalSubmitLock) {
+//         console.log('Submit debounced - waiting');
+//         return;
+//       }
+//       submitTimeoutRef.current = setTimeout(() => {
+//         onSubmit(data);
+//         submitTimeoutRef.current = null;
+//       }, 1000);
+//     },
+//     [onSubmit]
+//   );
 
 //   return (
 //     <div>
@@ -181,7 +265,20 @@
 //         contracts?.doArt &&
 //         contracts?.escrowListings && (
 //           <StyledForm
-//             onSubmit={handleSubmit(onSubmit)}
+//             onSubmit={(e) => {
+//               e.preventDefault();
+//               e.stopPropagation();
+//               if (
+//                 isWorking ||
+//                 isConverting ||
+//                 isSubmitting ||
+//                 globalSubmitLock
+//               ) {
+//                 console.log('Form submit blocked - in progress');
+//                 return;
+//               }
+//               handleSubmit(debouncedSubmit)(e);
+//             }}
 //             type={onCloseModal ? 'modal' : 'regular'}
 //           >
 //             <FormRow label="NFT Title" error={errors?.title?.message}>
@@ -189,7 +286,7 @@
 //                 <Input
 //                   type="text"
 //                   id="title"
-//                   disabled={isWorking || isConverting}
+//                   disabled={isWorking || isConverting || isSubmitting}
 //                   {...register('title', { required: 'This field is required' })}
 //                   placeholder="Enter NFT title"
 //                 />
@@ -202,7 +299,7 @@
 //                     type="checkbox"
 //                     checked={useUsd}
 //                     onChange={() => setUseUsd(!useUsd)}
-//                     disabled={isWorking || isConverting}
+//                     disabled={isWorking || isConverting || isSubmitting}
 //                   />
 //                   Use USD (uncheck for ETH)
 //                 </label>
@@ -215,7 +312,7 @@
 //               <Tooltip
 //                 text={
 //                   useUsd
-//                     ? 'Enter the price in USD. It will be converted to ETH for the blockchain.'
+//                     ? 'Enter the price in USD. It will be converted to ETH.'
 //                     : 'Enter the price in ETH.'
 //                 }
 //               >
@@ -223,7 +320,7 @@
 //                   type="number"
 //                   step={useUsd ? '0.01' : '0.0001'}
 //                   id="purchasePrice"
-//                   disabled={isWorking || isConverting}
+//                   disabled={isWorking || isConverting || isSubmitting}
 //                   value={useUsd ? usdPrice : ethPrice}
 //                   onChange={(e) => {
 //                     const value = e.target.value;
@@ -246,13 +343,17 @@
 //                   isConverting
 //                     ? 'Converting...'
 //                     : useUsd
-//                       ? `${ethPrice} ETH`
-//                       : `$${usdPrice}`
+//                       ? `${ethPrice || 'N/A'} ETH`
+//                       : `$${usdPrice || 'N/A'}`
 //                 }
 //               />
 //             </FormRow>
 //             <FormRow label="Estimated Gas Cost">
-//               <Tooltip text="Estimated cost of the blockchain transaction, paid in ETH. Actual cost may vary based on network conditions.">
+//               <Tooltip
+//                 text="Estimated cost of the blockchain transaction, paid in ETH.  Actual cost may vary based on network conditions.
+
+// "
+//               >
 //                 <Input type="text" disabled value={`$${gasEstimate}`} />
 //               </Tooltip>
 //             </FormRow>
@@ -260,7 +361,7 @@
 //               <Tooltip text="A brief description of your NFT, visible to buyers.">
 //                 <Textarea
 //                   id="description"
-//                   disabled={isWorking || isConverting}
+//                   disabled={isWorking || isConverting || isSubmitting}
 //                   {...register('description', {
 //                     required: 'This field is required'
 //                   })}
@@ -273,7 +374,7 @@
 //                 <Input
 //                   type="number"
 //                   id="royaltyBps"
-//                   disabled={isWorking || isConverting}
+//                   disabled={isWorking || isConverting || isSubmitting}
 //                   placeholder="Enter royalty in bps (e.g., 500 for 5%)"
 //                   {...register('royaltyBps', {
 //                     required: 'This field is required',
@@ -288,7 +389,7 @@
 //                 <FileInput
 //                   id="image"
 //                   accept="image/*"
-//                   disabled={isWorking || isConverting}
+//                   disabled={isWorking || isConverting || isSubmitting}
 //                   {...register('image', {
 //                     required: isEditSession ? false : 'This field is required'
 //                   })}
@@ -300,12 +401,17 @@
 //                 variation="secondary"
 //                 type="reset"
 //                 onClick={() => onCloseModal?.()}
-//                 disabled={isWorking || isConverting}
+//                 disabled={isWorking || isConverting || isSubmitting}
 //               >
 //                 Cancel
 //               </Button>
-//               <Button disabled={isWorking || isConverting}>
-//                 {isWorking ? (
+//               <Button
+//                 disabled={
+//                   isWorking || isConverting || isSubmitting || globalSubmitLock
+//                 }
+//                 type="submit" // Ensure type is submit
+//               >
+//                 {isWorking || isSubmitting ? (
 //                   <Spinner />
 //                 ) : isEditSession ? (
 //                   'Update Listing'
@@ -321,8 +427,9 @@
 // }
 
 // export default CreateNftForm;
+
 import { useForm } from 'react-hook-form';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
 import Button from './Button';
 import FileInput from './FileInput';
@@ -336,7 +443,11 @@ import { useCreateNft } from '../hooks/useCreateNft';
 import { useEditNft } from '../hooks/useEditNft';
 import { useWeb3Context } from '../context/Web3Context.jsx';
 import { toast } from 'react-hot-toast';
-import { convertUsdToEth, estimateGasCostInUsd } from '../utils/priceConverter';
+import {
+  convertUsdToEth,
+  estimateGasCostInUsd,
+  getEthPriceInUsd
+} from '../utils/priceConverter';
 import { ethers } from 'ethers';
 
 const StyledForm = styled(Form)`
@@ -353,13 +464,15 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
   const { isCreating, createNft } = useCreateNft();
   const { isEditing, editNft } = useEditNft();
   const {
-    contracts,
+    contracts = {},
     account,
     error: web3Error,
     isLoading,
     provider
   } = useWeb3Context();
   const isWorking = isCreating || isEditing;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittedRef = useRef(false);
 
   const {
     id: editId,
@@ -379,24 +492,27 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
   const [usdPrice, setUsdPrice] = useState('');
   const [gasEstimate, setGasEstimate] = useState('Calculating...');
   const [isConverting, setIsConverting] = useState(false);
-  const priceValue = watch('purchasePrice');
+  const purchasePriceValue = watch('purchasePrice');
 
-  // Validate price with debounce
   useEffect(() => {
-    let timeout;
+    console.log('CreateNftForm re-rendered');
+    return () => console.log('CreateNftForm unmounted');
+  }, []);
+
+  useEffect(() => {
     const validatePrice = () => {
-      console.log(`CreateNftForm: Validating price, value=${priceValue}`);
-      if (priceValue && Number(priceValue) <= 0) {
+      console.log(
+        `CreateNftForm: Validating price, value=${purchasePriceValue}`
+      );
+      if (purchasePriceValue && Number(purchasePriceValue) <= 0) {
         toast.error('Price must be positive', { id: 'price-error' });
       }
     };
-    if (priceValue) {
-      timeout = setTimeout(validatePrice, 500);
+    if (purchasePriceValue !== undefined && purchasePriceValue !== '') {
+      validatePrice();
     }
-    return () => clearTimeout(timeout);
-  }, [priceValue]);
+  }, [purchasePriceValue]);
 
-  // Estimate gas cost
   useEffect(() => {
     const fetchGasEstimate = async () => {
       try {
@@ -410,24 +526,24 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
     if (provider) fetchGasEstimate();
   }, [provider]);
 
-  // Handle price conversion
   useEffect(() => {
-    let timeout;
     const convertPrice = async () => {
       setIsConverting(true);
       try {
-        if (useUsd && usdPrice) {
-          const { ethAmount } = await convertUsdToEth(usdPrice);
+        if (useUsd && purchasePriceValue) {
+          const { ethAmount } = await convertUsdToEth(purchasePriceValue);
           setEthPrice(ethAmount);
-        } else if (!useUsd && ethPrice) {
+          setUsdPrice(purchasePriceValue);
+        } else if (!useUsd && purchasePriceValue) {
           const ethPriceInUsd = await getEthPriceInUsd();
-          setUsdPrice((Number(ethPrice) * ethPriceInUsd).toFixed(2));
+          setUsdPrice((Number(purchasePriceValue) * ethPriceInUsd).toFixed(2));
+          setEthPrice(purchasePriceValue);
         } else {
           setEthPrice('');
           setUsdPrice('');
         }
       } catch (error) {
-        console.error('CreateNftForm: Conversion error:', error);
+        console.error('Conversion error:', error);
         setEthPrice('');
         toast.error('USD to ETH conversion failed. Please use ETH price.', {
           id: 'convert-error'
@@ -436,62 +552,99 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
         setIsConverting(false);
       }
     };
-    timeout = setTimeout(convertPrice, 500);
-    return () => clearTimeout(timeout);
-  }, [useUsd, usdPrice, ethPrice]);
+    convertPrice();
+  }, [useUsd, purchasePriceValue]);
 
-  async function onSubmit(data) {
-    if (useUsd && !ethPrice) {
-      toast.error(
-        'Cannot submit: USD to ETH conversion failed. Please use ETH price or try again.',
-        { id: 'submit-error' }
-      );
-      return;
-    }
-    const image = typeof data.image === 'string' ? data.image : data.image[0];
-    const priceField = useUsd ? ethPrice : ethPrice || data.purchasePrice;
+  const onSubmit = useCallback(
+    async (data) => {
+      console.log('onSubmit called');
+      if (isSubmittedRef.current || isWorking) {
+        console.log('Submit blocked - already processing');
+        return;
+      }
+      isSubmittedRef.current = true;
+      setIsSubmitting(true);
 
-    try {
-      console.log('CreateNftForm: Submitting with priceField:', priceField);
-      if (isEditSession) {
-        await editNft(
-          {
-            newNftData: { ...data, purchasePrice: priceField },
-            id: editId,
-            contractAddress: editContractAddress || contracts?.doArt?.address
-          },
-          {
-            onSuccess: () => {
-              reset();
-              onCloseModal?.();
-              toast.success(`NFT updated for $${usdPrice} (~${ethPrice} ETH)`);
+      try {
+        const image =
+          typeof data.image === 'string' ? data.image : data.image[0];
+        const priceField = useUsd ? ethPrice : data.purchasePrice;
+        if (useUsd && !ethPrice) {
+          toast.error(
+            'Cannot submit: USD to ETH conversion failed. Please use ETH price.',
+            {
+              id: 'submit-error'
             }
-          }
-        );
-      } else {
-        await createNft(
-          {
+          );
+          return;
+        }
+        if (!priceField || Number(priceField) <= 0) {
+          toast.error('Valid positive ETH equivalent price is required', {
+            id: 'price-error'
+          });
+          return;
+        }
+
+        console.log('Submitting with priceField:', priceField);
+        if (isEditSession) {
+          await editNft(
+            {
+              newNftData: { ...data, purchasePrice: priceField },
+              id: editId,
+              contractAddress: editContractAddress || contracts?.doArt?.address
+            },
+            {
+              onSuccess: () => {
+                reset();
+                onCloseModal?.();
+                toast.success(
+                  `NFT updated for $${usdPrice} (~${ethPrice} ETH)`,
+                  {
+                    id: 'edit-success'
+                  }
+                );
+              },
+              onError: (err) =>
+                toast.error(`Failed to update NFT: ${err.message}`, {
+                  id: 'edit-error'
+                })
+            }
+          );
+        } else {
+          await createNft({
             ...data,
             image,
             purchasePrice: priceField,
             isUsd: useUsd,
             royaltyBps: data.royaltyBps || 500
-          },
-          {
-            onSuccess: () => {
-              reset();
-              onCloseModal?.();
-              toast.success(`NFT minted for $${usdPrice} (~${ethPrice} ETH)`);
-            },
-            onError: (err) => toast.error(`Failed to mint NFT: ${err.message}`)
-          }
-        );
+          });
+        }
+      } catch (err) {
+        console.error('Transaction error:', err);
+        toast.error(`Transaction failed: ${err.message}`, {
+          id: 'transaction-error'
+        });
+      } finally {
+        isSubmittedRef.current = false;
+        setIsSubmitting(false);
+        onCloseModal?.();
       }
-    } catch (err) {
-      console.error('CreateNftForm: Transaction error:', err);
-      toast.error(`Transaction failed: ${err.message}`);
-    }
-  }
+    },
+    [
+      useUsd,
+      ethPrice,
+      usdPrice,
+      createNft,
+      editNft,
+      isEditSession,
+      editId,
+      editContractAddress,
+      contracts,
+      onCloseModal,
+      reset,
+      isWorking
+    ]
+  );
 
   return (
     <div>
@@ -528,7 +681,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                 <Input
                   type="text"
                   id="title"
-                  disabled={isWorking || isConverting}
+                  disabled={isWorking || isConverting || isSubmitting}
                   {...register('title', { required: 'This field is required' })}
                   placeholder="Enter NFT title"
                 />
@@ -541,7 +694,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                     type="checkbox"
                     checked={useUsd}
                     onChange={() => setUseUsd(!useUsd)}
-                    disabled={isWorking || isConverting}
+                    disabled={isWorking || isConverting || isSubmitting}
                   />
                   Use USD (uncheck for ETH)
                 </label>
@@ -554,7 +707,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
               <Tooltip
                 text={
                   useUsd
-                    ? 'Enter the price in USD. It will be converted to ETH for the blockchain.'
+                    ? 'Enter the price in USD. It will be converted to ETH.'
                     : 'Enter the price in ETH.'
                 }
               >
@@ -562,7 +715,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                   type="number"
                   step={useUsd ? '0.01' : '0.0001'}
                   id="purchasePrice"
-                  disabled={isWorking || isConverting}
+                  disabled={isWorking || isConverting || isSubmitting}
                   value={useUsd ? usdPrice : ethPrice}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -599,7 +752,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
               <Tooltip text="A brief description of your NFT, visible to buyers.">
                 <Textarea
                   id="description"
-                  disabled={isWorking || isConverting}
+                  disabled={isWorking || isConverting || isSubmitting}
                   {...register('description', {
                     required: 'This field is required'
                   })}
@@ -612,7 +765,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                 <Input
                   type="number"
                   id="royaltyBps"
-                  disabled={isWorking || isConverting}
+                  disabled={isWorking || isConverting || isSubmitting}
                   placeholder="Enter royalty in bps (e.g., 500 for 5%)"
                   {...register('royaltyBps', {
                     required: 'This field is required',
@@ -627,7 +780,7 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                 <FileInput
                   id="image"
                   accept="image/*"
-                  disabled={isWorking || isConverting}
+                  disabled={isWorking || isConverting || isSubmitting}
                   {...register('image', {
                     required: isEditSession ? false : 'This field is required'
                   })}
@@ -639,12 +792,15 @@ function CreateNftForm({ nftToEdit = {}, onCloseModal }) {
                 variation="secondary"
                 type="reset"
                 onClick={() => onCloseModal?.()}
-                disabled={isWorking || isConverting}
+                disabled={isWorking || isConverting || isSubmitting}
               >
                 Cancel
               </Button>
-              <Button disabled={isWorking || isConverting}>
-                {isWorking ? (
+              <Button
+                type="submit"
+                disabled={isWorking || isConverting || isSubmitting}
+              >
+                {isWorking || isSubmitting ? (
                   <Spinner />
                 ) : isEditSession ? (
                   'Update Listing'

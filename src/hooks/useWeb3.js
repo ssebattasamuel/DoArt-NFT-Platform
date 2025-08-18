@@ -1,264 +1,3 @@
-// import { useState, useEffect, useCallback } from 'react';
-// import { ethers } from 'ethers';
-// import { toast } from 'react-hot-toast';
-// import DoArtABI from '../abis/DoArt.json';
-// import EscrowStorageABI from '../abis/EscrowStorage.json';
-// import EscrowListingsABI from '../abis/EscrowListings.json';
-// import EscrowAuctionsABI from '../abis/EscrowAuctions.json';
-// import EscrowLazyMintingABI from '../abis/EscrowLazyMinting.json';
-// import config from '../config';
-
-// export function useWeb3() {
-//   const [provider, setProvider] = useState(null);
-//   const [signer, setSigner] = useState(null);
-//   const [account, setAccount] = useState(null);
-//   const [contracts, setContracts] = useState({});
-//   const [isLoading, setIsLoading] = useState(true);
-//   const [error, setError] = useState(null);
-//   const chainId = import.meta.env.VITE_CHAIN_ID;
-
-//   const initWeb3 = useCallback(async () => {
-//     setIsLoading(true);
-//     setError(null);
-//     setAccount(null);
-//     setSigner(null);
-//     setContracts({});
-//     try {
-//       if (!window.ethereum) {
-//         throw new Error(
-//           'MetaMask not installed. Please install MetaMask to use this app.'
-//         );
-//       }
-//       const web3Provider = new ethers.providers.Web3Provider(
-//         window.ethereum,
-//         'any'
-//       );
-//       const network = await web3Provider.getNetwork();
-//       const currentChainId = network.chainId;
-//       console.log('useWeb3: Current chain ID:', currentChainId);
-//       console.log('useWeb3: Expected chain ID:', chainId);
-//       if (currentChainId !== parseInt(chainId)) {
-//         try {
-//           console.log('useWeb3: Switching to chain:', chainId);
-//           await window.ethereum.request({
-//             method: 'wallet_switchEthereumChain',
-//             params: [{ chainId: `0x${parseInt(chainId).toString(16)}` }]
-//           });
-//         } catch (switchError) {
-//           if (switchError.code === 4902) {
-//             console.log('useWeb3: Adding Hardhat network');
-//             await window.ethereum.request({
-//               method: 'wallet_addEthereumChain',
-//               params: [
-//                 {
-//                   chainId: `0x${parseInt(chainId).toString(16)}`,
-//                   chainName: 'Hardhat Local',
-//                   rpcUrls: ['http://127.0.0.1:8545'],
-//                   nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
-//                 }
-//               ]
-//             });
-//           } else {
-//             throw new Error(`Network switch failed: ${switchError.message}`);
-//           }
-//         }
-//       }
-//       setProvider(web3Provider);
-
-//       const doArt = new ethers.Contract(
-//         config[network.chainId]?.doArt?.address || '0x0',
-//         DoArtABI.abi,
-//         web3Provider
-//       );
-//       const escrowStorage = new ethers.Contract(
-//         config[network.chainId]?.escrowStorage?.address || '0x0',
-//         EscrowStorageABI.abi,
-//         web3Provider
-//       );
-//       const escrowListings = new ethers.Contract(
-//         config[network.chainId]?.escrowListings?.address || '0x0',
-//         EscrowListingsABI.abi,
-//         web3Provider
-//       );
-//       const escrowAuctions = new ethers.Contract(
-//         config[network.chainId]?.escrowAuctions?.address || '0x0',
-//         EscrowAuctionsABI.abi,
-//         web3Provider
-//       );
-//       const escrowLazyMinting = new ethers.Contract(
-//         config[network.chainId]?.escrowLazyMinting?.address || '0x0',
-//         EscrowLazyMintingABI.abi,
-//         web3Provider
-//       );
-
-//       setContracts({
-//         doArt,
-//         escrowStorage,
-//         escrowListings,
-//         escrowAuctions,
-//         escrowLazyMinting
-//       });
-
-//       const accounts = await window.ethereum.request({
-//         method: 'eth_accounts'
-//       });
-//       if (accounts.length > 0) {
-//         const address = ethers.utils.getAddress(accounts[0]);
-//         const newSigner = web3Provider.getSigner();
-//         setAccount(address);
-//         setSigner(newSigner);
-//         setContracts({
-//           doArt: doArt.connect(newSigner),
-//           escrowStorage: escrowStorage.connect(newSigner),
-//           escrowListings: escrowListings.connect(newSigner),
-//           escrowAuctions: escrowAuctions.connect(newSigner),
-//           escrowLazyMinting: escrowLazyMinting.connect(newSigner)
-//         });
-//         toast.success(
-//           `Connected: ${address.slice(0, 6)}...${address.slice(-4)}`,
-//           { id: 'connect-wallet' }
-//         );
-//       }
-//     } catch (err) {
-//       setError(err.message);
-//       toast.error(`Web3 initialization failed: ${err.message}`, {
-//         id: 'web3-init'
-//       });
-//       console.error('Web3 error:', err);
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   }, [chainId]);
-
-//   useEffect(() => {
-//     initWeb3();
-//   }, [initWeb3]);
-
-//   const connectWallet = useCallback(async () => {
-//     console.log('useWeb3: connectWallet called');
-//     if (!window.ethereum) {
-//       toast.error('Please install MetaMask!', { id: 'metamask-error' });
-//       console.error('useWeb3: MetaMask not detected in connectWallet');
-//       return;
-//     }
-//     try {
-//       const accounts = await window.ethereum.request({
-//         method: 'eth_requestAccounts'
-//       });
-//       if (accounts.length === 0) {
-//         throw new Error('No accounts selected');
-//       }
-//       const address = ethers.utils.getAddress(accounts[0]);
-//       const web3Provider =
-//         provider || new ethers.providers.Web3Provider(window.ethereum, 'any');
-//       const newSigner = web3Provider.getSigner();
-//       setAccount(address);
-//       setSigner(newSigner);
-//       setContracts((prev) => ({
-//         doArt: prev.doArt?.connect(newSigner) || prev.doArt,
-//         escrowStorage:
-//           prev.escrowStorage?.connect(newSigner) || prev.escrowStorage,
-//         escrowListings:
-//           prev.escrowListings?.connect(newSigner) || prev.escrowListings,
-//         escrowAuctions:
-//           prev.escrowAuctions?.connect(newSigner) || prev.escrowAuctions,
-//         escrowLazyMinting:
-//           prev.escrowLazyMinting?.connect(newSigner) || prev.escrowLazyMinting
-//       }));
-//       toast.success(
-//         `Connected: ${address.slice(0, 6)}...${address.slice(-4)}`,
-//         { id: 'connect-wallet' }
-//       );
-//     } catch (err) {
-//       setAccount(null);
-//       setSigner(null);
-//       toast.error(`Connection failed: ${err.message}`, { id: 'connect-error' });
-//       console.error('Connect wallet error:', err);
-//     }
-//   }, [provider]);
-
-//   useEffect(() => {
-//     if (window.ethereum) {
-//       console.log('useWeb3: Setting up event listeners');
-//       const handleAccountsChanged = async (accounts) => {
-//         console.log('useWeb3: Accounts changed:', accounts);
-//         if (accounts.length === 0) {
-//           setAccount(null);
-//           setSigner(null);
-//           setContracts((prev) => ({
-//             doArt: prev.doArt?.connect(provider) || prev.doArt,
-//             escrowStorage:
-//               prev.escrowStorage?.connect(provider) || prev.escrowStorage,
-//             escrowListings:
-//               prev.escrowListings?.connect(provider) || prev.escrowListings,
-//             escrowAuctions:
-//               prev.escrowAuctions?.connect(provider) || prev.escrowAuctions,
-//             escrowLazyMinting:
-//               prev.escrowLazyMinting?.connect(provider) ||
-//               prev.escrowLazyMinting
-//           }));
-//           toast.info('Wallet disconnected', { id: 'wallet-disconnect' });
-//         } else if (!account) {
-//           const address = ethers.utils.getAddress(accounts[0]);
-//           const web3Provider =
-//             provider ||
-//             new ethers.providers.Web3Provider(window.ethereum, 'any');
-//           const newSigner = web3Provider.getSigner();
-//           setAccount(address);
-//           setSigner(newSigner);
-//           setContracts((prev) => ({
-//             doArt: prev.doArt?.connect(newSigner) || prev.doArt,
-//             escrowStorage:
-//               prev.escrowStorage?.connect(newSigner) || prev.escrowStorage,
-//             escrowListings:
-//               prev.escrowListings?.connect(newSigner) || prev.escrowListings,
-//             escrowAuctions:
-//               prev.escrowAuctions?.connect(newSigner) || prev.escrowAuctions,
-//             escrowLazyMinting:
-//               prev.escrowLazyMinting?.connect(newSigner) ||
-//               prev.escrowLazyMinting
-//           }));
-//           toast.success(
-//             `Connected: ${address.slice(0, 6)}...${address.slice(-4)}`,
-//             { id: 'connect-wallet' }
-//           );
-//         }
-//       };
-
-//       const handleChainChanged = () => {
-//         console.log('useWeb3: Chain changed');
-//         setAccount(null);
-//         setSigner(null);
-//         setContracts({});
-//         window.location.reload();
-//       };
-
-//       window.ethereum.on('accountsChanged', handleAccountsChanged);
-//       window.ethereum.on('chainChanged', handleChainChanged);
-
-//       return () => {
-//         window.ethereum.removeListener(
-//           'accountsChanged',
-//           handleAccountsChanged
-//         );
-//         window.ethereum.removeListener('chainChanged', handleChainChanged);
-//       };
-//     } else {
-//       setError('MetaMask not detected. Please install MetaMask.');
-//       setIsLoading(false);
-//     }
-//   }, [provider, account]);
-
-//   return {
-//     provider,
-//     signer,
-//     account,
-//     contracts,
-//     isLoading,
-//     error,
-//     connectWallet
-//   };
-// }
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'react-hot-toast';
@@ -278,6 +17,15 @@ export function useWeb3() {
   const [error, setError] = useState(null);
   const chainId = import.meta.env.VITE_CHAIN_ID;
 
+  const withTimeout = (promise, timeoutMs, context = 'Operation') => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs)
+      )
+    ]);
+  };
+
   const initWeb3 = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -290,35 +38,54 @@ export function useWeb3() {
           'MetaMask not installed. Please install MetaMask to use this app.'
         );
       }
+      console.log('useWeb3: Checking MetaMask availability');
+      // Wait briefly to ensure MetaMask is ready
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      console.log('useWeb3: Initializing Web3 provider');
       const web3Provider = new ethers.providers.Web3Provider(
         window.ethereum,
         'any'
       );
-      const network = await web3Provider.getNetwork();
+
+      console.log('useWeb3: Fetching network');
+      const network = await withTimeout(
+        web3Provider.getNetwork(),
+        15000,
+        'Network fetch'
+      );
       const currentChainId = network.chainId;
       console.log('useWeb3: Current chain ID:', currentChainId);
       console.log('useWeb3: Expected chain ID:', chainId);
       if (currentChainId !== parseInt(chainId)) {
         try {
           console.log('useWeb3: Switching to chain:', chainId);
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: `0x${parseInt(chainId).toString(16)}` }]
-          });
+          await withTimeout(
+            window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${parseInt(chainId).toString(16)}` }]
+            }),
+            15000,
+            'Network switch'
+          );
         } catch (switchError) {
           if (switchError.code === 4902) {
             console.log('useWeb3: Adding Hardhat network');
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [
-                {
-                  chainId: `0x${parseInt(chainId).toString(16)}`,
-                  chainName: 'Hardhat Local',
-                  rpcUrls: ['http://127.0.0.1:8545'],
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
-                }
-              ]
-            });
+            await withTimeout(
+              window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [
+                  {
+                    chainId: `0x${parseInt(chainId).toString(16)}`,
+                    chainName: 'Hardhat Local',
+                    rpcUrls: ['http://127.0.0.1:8545'],
+                    nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }
+                  }
+                ]
+              }),
+              15000,
+              'Add Hardhat network'
+            );
           } else {
             throw new Error(`Network switch failed: ${switchError.message}`);
           }
@@ -326,30 +93,48 @@ export function useWeb3() {
       }
       setProvider(web3Provider);
 
+      console.log('useWeb3: Validating contract addresses');
+      const chainConfig = config[network.chainId];
+      if (
+        !chainConfig?.doArt?.address ||
+        !chainConfig?.escrowStorage?.address
+      ) {
+        throw new Error('Invalid or missing contract addresses in config.js');
+      }
+
+      console.log('useWeb3: Initializing contracts');
       const doArt = new ethers.Contract(
-        config[network.chainId]?.doArt?.address || '0x0',
+        chainConfig.doArt.address,
         DoArtABI.abi,
         web3Provider
       );
       const escrowStorage = new ethers.Contract(
-        config[network.chainId]?.escrowStorage?.address || '0x0',
+        chainConfig.escrowStorage.address,
         EscrowStorageABI.abi,
         web3Provider
       );
       const escrowListings = new ethers.Contract(
-        config[network.chainId]?.escrowListings?.address || '0x0',
+        chainConfig.escrowListings.address,
         EscrowListingsABI.abi,
         web3Provider
       );
       const escrowAuctions = new ethers.Contract(
-        config[network.chainId]?.escrowAuctions?.address || '0x0',
+        chainConfig.escrowAuctions.address,
         EscrowAuctionsABI.abi,
         web3Provider
       );
       const escrowLazyMinting = new ethers.Contract(
-        config[network.chainId]?.escrowLazyMinting?.address || '0x0',
+        chainConfig.escrowLazyMinting.address,
         EscrowLazyMintingABI.abi,
         web3Provider
+      );
+
+      // Verify contract connectivity
+      console.log('useWeb3: Testing contract connectivity');
+      await withTimeout(
+        doArt.paused(),
+        5000,
+        'DoArt contract connectivity test'
       );
 
       setContracts({
@@ -360,11 +145,12 @@ export function useWeb3() {
         escrowLazyMinting
       });
 
-      const accounts = await window.ethereum
-        .request({
-          method: 'eth_accounts'
-        })
-        .catch(() => []);
+      console.log('useWeb3: Fetching accounts');
+      const accounts = await withTimeout(
+        window.ethereum.request({ method: 'eth_accounts' }),
+        10000,
+        'Account fetch'
+      ).catch(() => []);
       if (accounts.length > 0) {
         const address = ethers.utils.getAddress(accounts[0]);
         const newSigner = web3Provider.getSigner();
@@ -383,32 +169,40 @@ export function useWeb3() {
         );
       }
     } catch (err) {
-      setError(err.message);
+      console.error('useWeb3: Initialization error:', err.message, err.stack);
+      setError(`Web3 initialization failed: ${err.message}`);
       toast.error(`Web3 initialization failed: ${err.message}`, {
         id: 'web3-init'
       });
-      console.error('Web3 error:', err);
     } finally {
       setIsLoading(false);
+      console.log('useWeb3: Initialization complete, isLoading set to false');
     }
-  }, [chainId]);
+  }, []);
 
-  useEffect(() => {
-    initWeb3();
-  }, [initWeb3]);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const connectWallet = useCallback(async () => {
     console.log('useWeb3: connectWallet called');
     if (!window.ethereum) {
+      setError('MetaMask not detected. Please install MetaMask.');
       toast.error('Please install MetaMask!', { id: 'metamask-error' });
-      console.error('useWeb3: MetaMask not detected in connectWallet');
-      setError('MetaMask not detected');
       return;
     }
+    if (isConnecting) {
+      toast.error(
+        'Please wait for the current connection attempt to complete.',
+        { id: 'connect-pending' }
+      );
+      return;
+    }
+    setIsConnecting(true);
     try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
+      const accounts = await withTimeout(
+        window.ethereum.request({ method: 'eth_requestAccounts' }),
+        10000,
+        'Account request'
+      );
       if (accounts.length === 0) {
         throw new Error('No accounts selected');
       }
@@ -429,18 +223,36 @@ export function useWeb3() {
         escrowLazyMinting:
           prev.escrowLazyMinting?.connect(newSigner) || prev.escrowLazyMinting
       }));
+      setError(null);
       toast.success(
         `Connected: ${address.slice(0, 6)}...${address.slice(-4)}`,
         { id: 'connect-wallet' }
       );
     } catch (err) {
-      setAccount(null);
-      setSigner(null);
-      setError(`Connection failed: ${err.message}`);
-      toast.error(`Connection failed: ${err.message}`, { id: 'connect-error' });
+      if (err.message.includes('Already processing eth_requestAccounts')) {
+        setError('Connection failed: Please unlock MetaMask and try again.');
+        toast.error('Please unlock MetaMask and try again.', {
+          id: 'connect-pending'
+        });
+      } else {
+        setError(`Connection failed: ${err.message}`);
+        toast.error(`Connection failed: ${err.message}`, {
+          id: 'connect-error'
+        });
+      }
       console.error('Connect wallet error:', err);
+    } finally {
+      setIsConnecting(false);
     }
-  }, [provider]);
+  }, [provider, isConnecting]);
+
+  useEffect(() => {
+    // Delay initialization to ensure MetaMask is ready
+    const timer = setTimeout(() => {
+      initWeb3();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [initWeb3]);
 
   useEffect(() => {
     if (window.ethereum) {
@@ -462,6 +274,7 @@ export function useWeb3() {
               prev.escrowLazyMinting?.connect(provider) ||
               prev.escrowLazyMinting
           }));
+          setError('Wallet disconnected. Please reconnect.');
           toast.info('Wallet disconnected', { id: 'wallet-disconnect' });
         } else if (!account) {
           const address = ethers.utils.getAddress(accounts[0]);
@@ -483,6 +296,7 @@ export function useWeb3() {
               prev.escrowLazyMinting?.connect(newSigner) ||
               prev.escrowLazyMinting
           }));
+          setError(null);
           toast.success(
             `Connected: ${address.slice(0, 6)}...${address.slice(-4)}`,
             { id: 'connect-wallet' }
@@ -495,6 +309,7 @@ export function useWeb3() {
         setAccount(null);
         setSigner(null);
         setContracts({});
+        setError('Network changed. Reloading...');
         window.location.reload();
       };
 
@@ -514,7 +329,7 @@ export function useWeb3() {
       setError('MetaMask not detected. Please install MetaMask.');
       setIsLoading(false);
     }
-  }, [provider, account]);
+  }, []);
 
   return {
     provider,
@@ -523,6 +338,8 @@ export function useWeb3() {
     contracts,
     isLoading,
     error,
-    connectWallet
+    connectWallet,
+    isConnecting,
+    retryInit: initWeb3
   };
 }
