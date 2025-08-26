@@ -1,6 +1,7 @@
 import styled from 'styled-components';
 
 import { useMoveBack } from '../hooks/useMoveBack';
+import { useEffect } from 'react';
 import Heading from '../ui/Heading';
 
 const StyledPageNotFound = styled.main`
@@ -27,6 +28,12 @@ const Box = styled.div`
 `;
 
 function PageNotFound() {
+  useEffect(() => {
+    document.title = 'PageNotFound - DoArt';
+    return () => {
+      document.title = 'DoArt';
+    };
+  }, []);
   const moveBack = useMoveBack();
 
   return (

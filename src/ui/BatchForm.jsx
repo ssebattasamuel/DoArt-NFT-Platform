@@ -13,7 +13,11 @@ import Tooltip from './Tooltip';
 import { useBatchMint } from '../hooks/useBatchMint';
 import { useWeb3Context } from '../context/Web3Context.jsx';
 import { toast } from 'react-hot-toast';
-import { convertUsdToEth, estimateGasCostInUsd } from '../utils/priceConverter';
+import {
+  convertUsdToEth,
+  estimateGasCostInUsd,
+  getEthPriceInUsd
+} from '../utils/priceConverter';
 import { ethers } from 'ethers';
 
 const StyledBatchForm = styled(Form)`
@@ -71,10 +75,10 @@ function BatchForm({ type, onCloseModal }) {
   const { batchMint, isMinting } = useBatchMint();
   const {
     account,
-    error: web3Error,
     isLoading,
     provider,
-    contracts = {}
+    contracts = {},
+    error: web3Error
   } = useWeb3Context();
   const [useUsd, setUseUsd] = useState(true);
   const [gasEstimate, setGasEstimate] = useState('Calculating...');
@@ -184,9 +188,10 @@ function BatchForm({ type, onCloseModal }) {
     setValue(`items.${index}.purchasePrice`, value, { shouldValidate: true });
   };
 
-  const onSubmit = async (data) => {
-    if (isMint) {
-      try {
+  const onSubmitForm = async (data) => {
+    setIsSubmitting(true);
+    try {
+      if (isMint) {
         const invalidItems = data.items.some(
           (item, index) =>
             !priceInputs[index].eth || Number(priceInputs[index].eth) <= 0
@@ -208,7 +213,6 @@ function BatchForm({ type, onCloseModal }) {
           });
           return;
         }
-        setIsSubmitting(true);
         const formattedData = await Promise.all(
           data.items.map(async (item, index) => {
             const priceField = useUsd
@@ -220,32 +224,42 @@ function BatchForm({ type, onCloseModal }) {
               image: item.image?.[0],
               royaltyBps: item.royaltyBps || 500,
               purchasePrice: priceField,
-              isUsd: useUsd
+              isUsd: useUsd,
+              isListed: item.isListed || false,
+              isAuction: item.isAuction || false,
+              minBid: item.minBid || 0,
+              auctionDuration: item.auctionDuration || 0
             };
           })
         );
         console.log('BatchForm: Submitting batch data:', formattedData);
-        await batchMint(formattedData, {
-          onSuccess: () => {
-            toast.success(`Batch minted ${formattedData.length} NFTs`, {
-              id: 'batch-mint-success'
-            });
-            reset();
-            onCloseModal?.();
-          },
-          onError: (err) =>
-            toast.error(`Failed to mint NFTs: ${err.message}`, {
-              id: 'batch-mint-error'
-            })
-        });
-      } catch (err) {
-        console.error('BatchForm: Submission error:', err);
-        toast.error(`Failed to mint NFTs: ${err.message}`, {
-          id: 'batch-transaction-error'
-        });
-      } finally {
-        setIsSubmitting(false);
+        await batchMint(formattedData);
+      } else if (isList) {
+        const formattedData = data.items.map((item) => ({
+          tokenId: item.tokenId,
+          price: item.price,
+          minBid: item.minBid || 0,
+          isAuction: item.isAuction || false,
+          auctionDuration: item.isAuction ? item.auctionDuration : 0
+        }));
+        await onSubmit(formattedData);
+      } else if (isBid) {
+        const formattedData = data.items.map((item) => ({
+          contractAddress: contracts.doArt.address,
+          tokenId: item.tokenId,
+          amount: item.amount
+        }));
+        await onSubmit(formattedData);
       }
+      toast.success(
+        `${type.charAt(0).toUpperCase() + type.slice(1)} successful!`
+      );
+      reset();
+      onCloseModal?.();
+    } catch (err) {
+      toast.error(`Failed to ${type}: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -259,13 +273,7 @@ function BatchForm({ type, onCloseModal }) {
       )}
       {!isLoading && !web3Error && !account && (
         <p style={{ color: 'red', textAlign: 'center' }}>
-          Please connect your wallet to batch mint NFTs.{' '}
-          <Button
-            variation="primary"
-            onClick={() => contracts.connectWallet?.()}
-          >
-            Connect Wallet
-          </Button>
+          Please connect your wallet to batch operations.
         </p>
       )}
       {!isLoading &&
@@ -281,7 +289,7 @@ function BatchForm({ type, onCloseModal }) {
         account &&
         contracts?.doArt &&
         contracts?.escrowListings && (
-          <StyledBatchForm onSubmit={handleSubmit(onSubmit)} type="modal">
+          <StyledBatchForm onSubmit={handleSubmit(onSubmitForm)} type="modal">
             <Heading as="h3">
               {type === 'mint'
                 ? 'Batch Mint NFTs'
@@ -436,6 +444,68 @@ function BatchForm({ type, onCloseModal }) {
                         />
                       </Tooltip>
                     </FormRow>
+                    <FormRow label="List for Sale">
+                      <Tooltip text="Check to automatically list this NFT for sale after minting.">
+                        <Input
+                          type="checkbox"
+                          disabled={isMinting || isConverting || isSubmitting}
+                          {...register(`items.${index}.isListed`)}
+                        />
+                      </Tooltip>
+                    </FormRow>
+                    {watchedItems[index]?.isListed && (
+                      <FormRow label="Auction">
+                        <Tooltip text="Check to list as an auction instead of fixed price.">
+                          <Input
+                            type="checkbox"
+                            disabled={isMinting || isConverting || isSubmitting}
+                            {...register(`items.${index}.isAuction`)}
+                          />
+                        </Tooltip>
+                      </FormRow>
+                    )}
+                    {watchedItems[index]?.isListed &&
+                      watchedItems[index]?.isAuction && (
+                        <>
+                          <FormRow
+                            label="Min Bid (ETH)"
+                            error={errors.items?.[index]?.minBid?.message}
+                          >
+                            <Tooltip text="Minimum bid amount for the auction (in ETH).">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                disabled={
+                                  isMinting || isConverting || isSubmitting
+                                }
+                                {...register(`items.${index}.minBid`, {
+                                  required: 'This field is required'
+                                })}
+                                placeholder="Enter minimum bid in ETH"
+                              />
+                            </Tooltip>
+                          </FormRow>
+                          <FormRow
+                            label="Auction Duration (hours)"
+                            error={
+                              errors.items?.[index]?.auctionDuration?.message
+                            }
+                          >
+                            <Tooltip text="Duration of the auction in hours.">
+                              <Input
+                                type="number"
+                                disabled={
+                                  isMinting || isConverting || isSubmitting
+                                }
+                                {...register(`items.${index}.auctionDuration`, {
+                                  required: 'This field is required'
+                                })}
+                                placeholder="Enter auction duration in hours"
+                              />
+                            </Tooltip>
+                          </FormRow>
+                        </>
+                      )}
                   </>
                 )}
                 {(isList || isBid) && (
@@ -501,7 +571,7 @@ function BatchForm({ type, onCloseModal }) {
                         />
                       </Tooltip>
                     </FormRow>
-                    {field.isAuction && (
+                    {watchedItems[index]?.isAuction && (
                       <FormRow
                         label="Auction Duration (hours)"
                         error={errors.items?.[index]?.auctionDuration?.message}

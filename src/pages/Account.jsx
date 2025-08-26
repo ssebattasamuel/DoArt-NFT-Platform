@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import styled from 'styled-components';
 import Heading from '../ui/Heading';
 import Row from '../ui/Row';
@@ -44,6 +44,12 @@ const Section = styled.div`
 `;
 
 function Account() {
+  useEffect(() => {
+    document.title = 'Account - DoArt';
+    return () => {
+      document.title = 'DoArt';
+    };
+  }, []);
   const { account } = useWeb3();
   const {
     ownedNfts,

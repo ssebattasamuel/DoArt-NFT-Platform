@@ -38,8 +38,7 @@ export function useWeb3() {
           'MetaMask not installed. Please install MetaMask to use this app.'
         );
       }
-      console.log('useWeb3: Checking MetaMask availability');
-      // Wait briefly to ensure MetaMask is ready
+
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       console.log('useWeb3: Initializing Web3 provider');
@@ -48,15 +47,13 @@ export function useWeb3() {
         'any'
       );
 
-      console.log('useWeb3: Fetching network');
       const network = await withTimeout(
         web3Provider.getNetwork(),
         15000,
         'Network fetch'
       );
       const currentChainId = network.chainId;
-      console.log('useWeb3: Current chain ID:', currentChainId);
-      console.log('useWeb3: Expected chain ID:', chainId);
+
       if (currentChainId !== parseInt(chainId)) {
         try {
           console.log('useWeb3: Switching to chain:', chainId);
@@ -70,7 +67,6 @@ export function useWeb3() {
           );
         } catch (switchError) {
           if (switchError.code === 4902) {
-            console.log('useWeb3: Adding Hardhat network');
             await withTimeout(
               window.ethereum.request({
                 method: 'wallet_addEthereumChain',
@@ -93,7 +89,6 @@ export function useWeb3() {
       }
       setProvider(web3Provider);
 
-      console.log('useWeb3: Validating contract addresses');
       const chainConfig = config[network.chainId];
       if (
         !chainConfig?.doArt?.address ||
@@ -129,8 +124,6 @@ export function useWeb3() {
         web3Provider
       );
 
-      // Verify contract connectivity
-      console.log('useWeb3: Testing contract connectivity');
       await withTimeout(
         doArt.paused(),
         5000,
@@ -145,7 +138,6 @@ export function useWeb3() {
         escrowLazyMinting
       });
 
-      console.log('useWeb3: Fetching accounts');
       const accounts = await withTimeout(
         window.ethereum.request({ method: 'eth_accounts' }),
         10000,
@@ -169,21 +161,18 @@ export function useWeb3() {
         );
       }
     } catch (err) {
-      console.error('useWeb3: Initialization error:', err.message, err.stack);
       setError(`Web3 initialization failed: ${err.message}`);
       toast.error(`Web3 initialization failed: ${err.message}`, {
         id: 'web3-init'
       });
     } finally {
       setIsLoading(false);
-      console.log('useWeb3: Initialization complete, isLoading set to false');
     }
   }, []);
 
   const [isConnecting, setIsConnecting] = useState(false);
 
   const connectWallet = useCallback(async () => {
-    console.log('useWeb3: connectWallet called');
     if (!window.ethereum) {
       setError('MetaMask not detected. Please install MetaMask.');
       toast.error('Please install MetaMask!', { id: 'metamask-error' });
@@ -247,7 +236,6 @@ export function useWeb3() {
   }, [provider, isConnecting]);
 
   useEffect(() => {
-    // Delay initialization to ensure MetaMask is ready
     const timer = setTimeout(() => {
       initWeb3();
     }, 500);

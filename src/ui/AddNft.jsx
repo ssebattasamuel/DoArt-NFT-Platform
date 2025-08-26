@@ -3,7 +3,6 @@ import Modal from './Modal';
 import CreateNftForm from './CreateNftForm';
 
 function AddNft() {
-  console.log('AddNft rendered');
   return (
     <Modal>
       <Modal.Open opens="nft-form">

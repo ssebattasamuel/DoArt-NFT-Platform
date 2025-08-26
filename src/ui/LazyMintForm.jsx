@@ -23,6 +23,12 @@ function LazyMintForm({ onCloseModal }) {
       { ...data, image },
       {
         onSuccess: (voucher) => {
+          // Store voucher in localStorage for testing
+          const vouchers = JSON.parse(
+            localStorage.getItem('lazyVouchers') || '[]'
+          );
+          vouchers.push(voucher);
+          localStorage.setItem('lazyVouchers', JSON.stringify(vouchers));
           reset();
           onCloseModal?.();
           toast.success(

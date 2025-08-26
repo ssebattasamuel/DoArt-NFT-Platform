@@ -223,9 +223,11 @@ export async function batchMintNfts(nfts, { doArt, escrowListings }) {
       throw new Error('Signer not connected to contracts');
     }
     console.log('batchMintNfts: Batch mint input:', nfts);
-    const tokenIds = [];
-    const imageURIs = [];
-    for (const [index, nft] of nfts.entries()) {
+
+    const metadataURIs = [];
+    const royalties = [];
+    const prices = [];
+    for (const nft of nfts) {
       const {
         title,
         description,
@@ -234,27 +236,11 @@ export async function batchMintNfts(nfts, { doArt, escrowListings }) {
         purchasePrice,
         isUsd = false
       } = nft;
-      console.log(`batchMintNfts: Starting mint for NFT ${index + 1}`, {
-        title,
-        purchasePrice,
-        description,
-        royaltyBps,
-        isUsd
-      });
       if (!purchasePrice || Number(purchasePrice) <= 0) {
-        throw new Error(
-          `Valid purchase price is required for NFT ${index + 1}`
-        );
+        throw new Error('Valid purchase price is required');
       }
-      const imageUri = await withTimeout(
-        uploadToPinata(image),
-        TRANSACTION_TIMEOUT,
-        `Pinata image upload for NFT ${index + 1}`
-      );
-      console.log(
-        `batchMintNfts: Image pinned for NFT ${index + 1}, URI:`,
-        imageUri
-      );
+
+      const imageUri = await uploadToPinata(image);
       const metadata = {
         name: title,
         description,
@@ -262,104 +248,218 @@ export async function batchMintNfts(nfts, { doArt, escrowListings }) {
         originalPrice: purchasePrice,
         originalCurrency: isUsd ? 'USD' : 'ETH'
       };
-      const metadataUri = await withTimeout(
-        uploadToPinata(metadata, true),
-        TRANSACTION_TIMEOUT,
-        `Pinata metadata upload for NFT ${index + 1}`
-      );
-      console.log(
-        `batchMintNfts: Metadata pinned for NFT ${index + 1}, URI:`,
-        metadataUri
-      );
+      const metadataUri = await uploadToPinata(metadata, true);
+      metadataURIs.push(metadataUri);
+      royalties.push(royaltyBps);
 
-      console.log(
-        `batchMintNfts: Minting NFT ${index + 1} with URI`,
-        metadataUri
-      );
-      const mintTx = await withTimeout(
-        doArt.mint(metadataUri, royaltyBps, { gasLimit: 300000 }),
-        TRANSACTION_TIMEOUT,
-        `Mint transaction for NFT ${index + 1}`
-      );
-      const receipt = await withTimeout(
-        mintTx.wait(),
-        TRANSACTION_TIMEOUT,
-        `Mint confirmation for NFT ${index + 1}`
-      );
-      const tokenId = receipt.events
-        ?.find((e) => e.event === 'Transfer')
-        ?.args?.tokenId.toString();
-      tokenIds.push(tokenId);
-      console.log(`batchMintNfts: Minted NFT ${index + 1}, tokenId:`, tokenId);
-
-      console.log(
-        `batchMintNfts: Approving EscrowListings for tokenId: ${tokenId}`
-      );
-      const approveTx = await withTimeout(
-        doArt.approve(escrowListings.address, tokenId, { gasLimit: 100000 }),
-        TRANSACTION_TIMEOUT,
-        `Approve transaction for NFT ${index + 1}`
-      );
-      await withTimeout(
-        approveTx.wait(),
-        TRANSACTION_TIMEOUT,
-        `Approve confirmation for NFT ${index + 1}`
-      );
-
-      if (purchasePrice) {
-        let priceInWei;
-        if (isUsd) {
-          console.log(
-            `batchMintNfts: Converting USD price for NFT ${index + 1}:`,
-            purchasePrice
-          );
-          const { weiAmount } = await convertUsdToEth(purchasePrice);
-          priceInWei = weiAmount;
-        } else {
-          priceInWei = ethers.utils.parseEther(purchasePrice.toString());
-        }
-        const escrowAmount = ethers.utils.parseEther('0.01');
-        console.log(
-          `batchMintNfts: Listing NFT ${index + 1} with price:`,
-          priceInWei.toString()
-        );
-        const listTx = await withTimeout(
-          escrowListings.list(
-            doArt.address,
-            tokenId,
-            ethers.constants.AddressZero,
-            priceInWei,
-            0,
-            escrowAmount,
-            false,
-            0,
-            { gasLimit: 200000 }
-          ),
-          TRANSACTION_TIMEOUT,
-          `List transaction for NFT ${index + 1}`
-        );
-        await withTimeout(
-          listTx.wait(),
-          TRANSACTION_TIMEOUT,
-          `List confirmation for NFT ${index + 1}`
-        );
-        console.log(
-          `batchMintNfts: Listed NFT ${index + 1}, tokenId:`,
-          tokenId
-        );
+      // Calculate price for listing
+      let priceInWei;
+      if (isUsd) {
+        const { weiAmount } = await convertUsdToEth(purchasePrice);
+        priceInWei = weiAmount;
+      } else {
+        priceInWei = ethers.utils.parseEther(purchasePrice.toString());
       }
-      imageURIs.push(imageUri);
+      prices.push(priceInWei);
     }
-    console.log('batchMintNfts: Success, returning result');
-    return { tokenIds, imageURIs };
+
+    // Batch mint in one transaction
+
+    const mintTx = await doArt.batchMint(metadataURIs, royalties, {
+      gasLimit: 1000000
+    }); // Increase for larger batches
+    const receipt = await mintTx.wait();
+    const tokenIds = receipt.events
+      .filter((e) => e.event === 'Transfer')
+      .map((e) => e.args.tokenId.toString());
+
+    // Approve and list each
+    for (let i = 0; i < tokenIds.length; i++) {
+      const tokenId = tokenIds[i];
+      const approveTx = await doArt.approve(escrowListings.address, tokenId, {
+        gasLimit: 100000
+      });
+      await approveTx.wait();
+
+      if (prices[i]) {
+        const escrowAmount = ethers.utils.parseEther('0.01');
+        const listTx = await escrowListings.list(
+          doArt.address,
+          tokenId,
+          ethers.constants.AddressZero,
+          prices[i],
+          0,
+          escrowAmount,
+          false,
+          0,
+          { gasLimit: 200000 }
+        );
+        await listTx.wait();
+      }
+    }
+
+    return { tokenIds };
   } catch (err) {
-    console.error('batchMintNfts error:', err.message, err.stack);
-    toast.error(`batchMintNfts failed: ${err.message}`, {
-      id: 'batch-mint-nfts-error'
-    });
+    toast.error(`batchMintNfts failed: ${err.message}`);
     throw err;
   }
+
+  if (tokenIdsToList.length > 0) {
+    try {
+      // Approve all
+      for (const tokenId of tokenIdsToList) {
+        const approveTx = await doArt.approve(escrowListings.address, tokenId, {
+          gasLimit: 100000
+        });
+        await approveTx.wait();
+      }
+      // Batch list with higher gas
+      const listTx = await escrowListings.batchList(
+        nftContracts,
+        tokenIdsToList,
+        buyers,
+        prices,
+        minBids,
+        escrowAmounts,
+        isAuctions,
+        auctionDurations,
+        { gasLimit: 500000 * tokenIdsToList.length } // Increased from 200000
+      );
+      await listTx.wait();
+      console.log('batchMintNfts: Batch listed tokenIds:', tokenIdsToList);
+    } catch (listErr) {
+      console.error('batchMintNfts: Listing failed:', listErr);
+      toast.error(`Mint successful, but listing failed: ${listErr.message}`);
+    }
+  }
 }
+
+// export async function batchMintNfts(nfts, { doArt, escrowListings }) {
+//   try {
+//     if (!doArt?.signer || !escrowListings?.signer) {
+//       throw new Error('Signer not connected to contracts');
+//     }
+//     console.log('batchMintNfts: Batch mint input:', nfts);
+//     const metadataURIs = [];
+//     const royalties = [];
+//     const listingParams = [];
+//     for (const nft of nfts) {
+//       const {
+//         title,
+//         description,
+//         image,
+//         royaltyBps = 500,
+//         purchasePrice,
+//         isUsd = false,
+//         isListed = false,
+//         isAuction = false,
+//         minBid = 0,
+//         auctionDuration = 0
+//       } = nft;
+//       if (isListed && (!purchasePrice || Number(purchasePrice) <= 0)) {
+//         throw new Error('Valid purchase price is required for listed NFTs');
+//       }
+//       if (isAuction && (!minBid || Number(minBid) <= 0)) {
+//         throw new Error('Valid min bid is required for auctions');
+//       }
+//       const imageUri = await uploadToPinata(image);
+//       const metadata = {
+//         name: title,
+//         description,
+//         image: imageUri,
+//         originalPrice: purchasePrice,
+//         originalCurrency: isUsd ? 'USD' : 'ETH'
+//       };
+//       const metadataUri = await uploadToPinata(metadata, true);
+//       metadataURIs.push(metadataUri);
+//       royalties.push(royaltyBps);
+
+//       if (isListed) {
+//         let priceInWei;
+//         if (isUsd) {
+//           const { weiAmount } = await convertUsdToEth(purchasePrice);
+//           priceInWei = weiAmount;
+//         } else {
+//           priceInWei = ethers.utils.parseEther(purchasePrice.toString());
+//         }
+//         listingParams.push({
+//           price: priceInWei,
+//           isAuction,
+//           minBid: ethers.utils.parseEther(minBid.toString()),
+//           auctionDuration: auctionDuration * 3600
+//         });
+//       } else {
+//         listingParams.push(null);
+//       }
+//     }
+
+//     // Batch mint
+//     const mintTx = await doArt.batchMint(metadataURIs, royalties, {
+//       gasLimit: 1000000
+//     });
+//     const receipt = await mintTx.wait();
+//     const tokenIds = receipt.events
+//       .filter((e) => e.event === 'Transfer')
+//       .map((e) => e.args.tokenId.toString());
+
+//     console.log('batchMintNfts: Batch minted tokenIds:', tokenIds);
+
+//     const nftContracts = [];
+//     const tokenIdsToList = [];
+//     const buyers = [];
+//     const prices = [];
+//     const minBids = [];
+//     const escrowAmounts = [];
+//     const isAuctions = [];
+//     const auctionDurations = [];
+
+//     for (let i = 0; i < tokenIds.length; i++) {
+//       const tokenId = tokenIds[i];
+//       const params = listingParams[i];
+//       if (params) {
+//         nftContracts.push(doArt.address);
+//         tokenIdsToList.push(tokenId);
+//         buyers.push(ethers.constants.AddressZero);
+//         prices.push(params.price);
+//         minBids.push(params.isAuction ? params.minBid : 0);
+//         escrowAmounts.push(ethers.utils.parseEther('0.01'));
+//         isAuctions.push(params.isAuction);
+//         auctionDurations.push(params.isAuction ? params.auctionDuration : 0);
+//       }
+//     }
+
+//     if (tokenIdsToList.length > 0) {
+//       // Approve all
+//       for (const tokenId of tokenIdsToList) {
+//         const approveTx = await doArt.approve(escrowListings.address, tokenId, {
+//           gasLimit: 100000
+//         });
+//         await approveTx.wait();
+//       }
+//       // Batch list with higher gas
+//       const listTx = await escrowListings.batchList(
+//         nftContracts,
+//         tokenIdsToList,
+//         buyers,
+//         prices,
+//         minBids,
+//         escrowAmounts,
+//         isAuctions,
+//         auctionDurations,
+//         { gasLimit: 500000 * tokenIdsToList.length } // Increased from 200000
+//       );
+//       await listTx.wait();
+//       console.log('batchMintNfts: Batch listed tokenIds:', tokenIdsToList);
+//     }
+
+//     console.log('batchMintNfts: Success, returning tokenIds:', tokenIds);
+//     return { tokenIds };
+//   } catch (err) {
+//     console.error('batchMintNfts error:', err.message, err.stack);
+//     toast.error(`batchMintNfts failed: ${err.message}`);
+//     throw err;
+//   }
+// }
 
 export async function batchListNfts(listings, { escrowListings, doArt }) {
   const nftContracts = (listings || []).map(() => doArt.address);
@@ -396,7 +496,7 @@ export async function batchListNfts(listings, { escrowListings, doArt }) {
     { gasLimit: 200000 }
   );
   await listTx.wait();
-  console.log('batchListNfts: Success, listed tokenIds:', tokenIds);
+
   return tokenIds;
 }
 
@@ -412,7 +512,7 @@ export async function placeBid(
     { value: bidAmount }
   );
   await tx.wait();
-  console.log('placeBid: Success, bid placed for tokenId:', tokenId);
+
   return { contractAddress, tokenId, amount: bidAmount };
 }
 
@@ -433,7 +533,7 @@ export async function batchPlaceBids(bids, { escrowAuctions }) {
     { value: totalValue }
   );
   await tx.wait();
-  console.log('batchPlaceBids: Success, bids placed for tokenIds:', tokenIds);
+
   return bids;
 }
 
@@ -449,7 +549,7 @@ export async function placeAuctionBid(
     { value: bidAmount }
   );
   await tx.wait();
-  console.log('placeAuctionBid: Success, bid placed for tokenId:', tokenId);
+
   return { contractAddress, tokenId, amount: bidAmount };
 }
 
@@ -489,7 +589,7 @@ export async function editListing(
     { gasLimit: 100000 }
   );
   await tx.wait();
-  console.log('editListing: Success, updated listing for tokenId:', tokenId);
+
   return { contractAddress, tokenId, purchasePrice };
 }
 
@@ -545,10 +645,7 @@ export async function cancelListing(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log(
-    'cancelListing: Success, cancelled listing for tokenId:',
-    tokenId
-  );
+
   return { contractAddress, tokenId };
 }
 
@@ -556,14 +653,12 @@ export async function pauseContract(contract, contractName) {
   const tx = await contract.pause();
   await tx.wait();
   toast.success(`${contractName} paused`);
-  console.log('pauseContract: Success, paused:', contractName);
 }
 
 export async function unpauseContract(contract, contractName) {
   const tx = await contract.unpause();
   await tx.wait();
   toast.success(`${contractName} unpaused`);
-  console.log('unpauseContract: Success, unpaused:', contractName);
 }
 
 export async function acceptBid(
@@ -577,7 +672,7 @@ export async function acceptBid(
     { gasLimit: 100000 }
   );
   await tx.wait();
-  console.log('acceptBid: Success, accepted bid for tokenId:', tokenId);
+
   return { contractAddress, tokenId, bidIndex };
 }
 
@@ -589,14 +684,14 @@ export async function endAuction(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log('endAuction: Success, ended auction for tokenId:', tokenId);
+
   return { contractAddress, tokenId };
 }
 
 export async function burnNft(tokenId, { doArt }) {
   const tx = await doArt.burn(tokenId, { gasLimit: 100000 });
   await tx.wait();
-  console.log('burnNft: Success, burned tokenId:', tokenId);
+
   return tokenId;
 }
 
@@ -608,16 +703,13 @@ export async function setArtistMetadata(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log('setArtistMetadata: Success, set metadata for artist');
+
   return { name, bio, portfolioUrl };
 }
 
 export async function getArtistMetadata(artist, { doArt }) {
   const metadata = await doArt.getArtistMetadata(artist);
-  console.log(
-    'getArtistMetadata: Success, fetched metadata for artist:',
-    artist
-  );
+
   return metadata;
 }
 
@@ -629,16 +721,13 @@ export async function setTokenRoyalty(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log('setTokenRoyalty: Success, set royalty for tokenId:', tokenId);
+
   return { tokenId, recipient, royaltyBps };
 }
 
 export async function getTokenDetails(tokenId, { doArt }) {
   const details = await doArt.getTokenDetails(tokenId);
-  console.log(
-    'getTokenDetails: Success, fetched details for tokenId:',
-    tokenId
-  );
+
   return details;
 }
 
@@ -650,10 +739,7 @@ export async function cancelAuction(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log(
-    'cancelAuction: Success, cancelled auction for tokenId:',
-    tokenId
-  );
+
   return { contractAddress, tokenId };
 }
 
@@ -666,7 +752,7 @@ export async function depositEarnest(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log('depositEarnest: Success, deposited for tokenId:', tokenId);
+
   return { contractAddress, tokenId, amount };
 }
 
@@ -681,7 +767,7 @@ export async function approveArtwork(
     { gasLimit: 100000 }
   );
   await tx.wait();
-  console.log('approveArtwork: Success, approved for tokenId:', tokenId);
+
   return { contractAddress, tokenId, approved };
 }
 
@@ -697,7 +783,7 @@ export async function updateListing(
     { gasLimit: 100000 }
   );
   await tx.wait();
-  console.log('updateListing: Success, updated listing for tokenId:', tokenId);
+
   return { contractAddress, tokenId, price };
 }
 
@@ -709,7 +795,7 @@ export async function cancelSale(
     gasLimit: 100000
   });
   await tx.wait();
-  console.log('cancelSale: Success, cancelled sale for tokenId:', tokenId);
+
   return { contractAddress, tokenId };
 }
 
@@ -726,7 +812,7 @@ export async function list(data, { escrowListings }) {
     { gasLimit: 200000 }
   );
   await tx.wait();
-  console.log('list: Success, listed tokenId:', data.tokenId);
+
   return data;
 }
 
@@ -743,14 +829,13 @@ export async function batchList(data, { escrowListings }) {
     { gasLimit: 200000 }
   );
   await tx.wait();
-  console.log('batchList: Success, listed tokenIds:', data.tokenIds);
+
   return data;
 }
 
 export async function getNfts({ escrowStorage, doArt }) {
   if (!escrowStorage || !doArt) throw new Error('Contracts not initialized');
   try {
-    console.log('getNfts: Fetching listings from EscrowStorage');
     const listings = await escrowStorage.getAllListings();
     const auctions = await escrowStorage.getAllAuctions();
     const nfts = [];

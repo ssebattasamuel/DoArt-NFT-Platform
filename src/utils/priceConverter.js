@@ -45,7 +45,7 @@ async function getEthPriceInUsd() {
     }
     throw error;
   } finally {
-    clearTimeout(timeoutId); // Always clear timeout
+    clearTimeout(timeoutId);
   }
 }
 

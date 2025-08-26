@@ -20,7 +20,7 @@ export async function uploadToPinata(file, isJson = false) {
       'metadata.json'
     );
   } else {
-    formData.append('file', file, 'art-image.jpg'); // Short file name
+    formData.append('file', file, 'art-image.jpg');
   }
 
   try {
@@ -46,3 +46,14 @@ export async function uploadToPinata(file, isJson = false) {
     throw new Error(`Pinata upload failed: ${error.message}`);
   }
 }
+
+// async function testPinata() {
+//   try {
+//     const testData = { test: 'Hello Pinata' };
+//     const uri = await uploadToPinata(testData, true);
+//     console.log('Pinata test success:', uri);
+//   } catch (err) {
+//     console.error('Pinata test failed:', err.response?.data || err.message);
+//   }
+// }
+// testPinata();

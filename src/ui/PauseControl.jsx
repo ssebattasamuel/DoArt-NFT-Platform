@@ -12,6 +12,13 @@ const Container = styled.div`
   gap: 1rem;
 `;
 
+const Message = styled.p`
+  color: var(--color-red-700);
+  text-align: center;
+  font-size: 1.6rem;
+  margin: 2rem 0;
+`;
+
 function PauseControl() {
   const { contracts, account } = useWeb3Context();
   const { pauseContract, unpauseContract, isPausing, isPaused } = usePause();
@@ -23,7 +30,7 @@ function PauseControl() {
     { contract: contracts?.escrowAuctions, name: 'EscrowAuctions' },
     { contract: contracts?.escrowLazyMinting, name: 'EscrowLazyMinting' },
     { contract: contracts?.doArt, name: 'DoArt' }
-  ].filter(({ contract }) => contract); // Filter out undefined contracts
+  ];
 
   const checkPermission = async (contract) => {
     if (!contract || !account) return false;
@@ -43,26 +50,45 @@ function PauseControl() {
       setIsLoading(true);
       const results = {};
       for (const { contract, name } of contractsToControl) {
-        results[name] = await checkPermission(contract);
+        if (contract) {
+          results[name] = await checkPermission(contract);
+        } else {
+          results[name] = false;
+        }
       }
+      console.log('PauseControl: Permissions fetched:', results);
       setPermissions(results);
       setIsLoading(false);
     };
     if (account && contracts?.doArt) {
+      console.log('PauseControl: Fetching permissions with account:', account);
       fetchPermissions();
     } else {
+      console.log(
+        'PauseControl: No account or doArt contract - skipping fetch'
+      );
       setIsLoading(false);
     }
   }, [contracts, account]);
 
   if (isLoading) return <Spinner />;
-  if (!account) return <p>Please connect your wallet to manage contracts.</p>;
+  if (!account)
+    return <Message>Please connect your wallet to manage contracts.</Message>;
+  if (!contracts || Object.keys(contracts).length === 0)
+    return (
+      <Message>
+        Contracts not loaded. Please refresh or check connection.
+      </Message>
+    );
+
+  const availableControls = contractsToControl.filter(
+    ({ contract }) => contract && permissions[name]
+  );
 
   return (
     <Container>
-      {contractsToControl
-        .filter(({ name }) => permissions[name])
-        .map(({ contract, name }) => {
+      {availableControls.length > 0 ? (
+        availableControls.map(({ contract, name }) => {
           const paused = isPaused[name] || false;
           return (
             <FormRow key={name}>
@@ -86,9 +112,11 @@ function PauseControl() {
               </Button>
             </FormRow>
           );
-        })}
-      {contractsToControl.length === 0 && (
-        <p>No contracts available or you lack permission to manage them.</p>
+        })
+      ) : (
+        <Message>
+          No pausable contracts available or you lack permission to manage them.
+        </Message>
       )}
     </Container>
   );

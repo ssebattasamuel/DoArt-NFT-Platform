@@ -4,7 +4,6 @@ import { useWeb3 } from '../hooks/useWeb3';
 const Web3Context = createContext();
 
 export function Web3Provider({ children }) {
-  console.log('Web3Provider rendered');
   const web3 = useWeb3();
   console.log('Web3Provider: Providing context', web3);
   return <Web3Context.Provider value={web3}>{children}</Web3Context.Provider>;

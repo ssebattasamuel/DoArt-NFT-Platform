@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ethers } from 'ethers';
 import styled from 'styled-components';
@@ -8,7 +9,7 @@ import DoArtABI from '../abis/DoArt.json';
 import EscrowStorageABI from '../abis/EscrowStorage.json';
 import config from '../config';
 import { formatCurrency } from '../utils/helpers';
-import { useWeb3 } from '../hooks/useWeb3'; // Import useWeb3 to get provider
+import { useWeb3 } from '../hooks/useWeb3';
 
 const StatsContainer = styled.div`
   display: grid;
@@ -37,7 +38,13 @@ const StatValue = styled.p`
 `;
 
 function Dashboard() {
-  const { provider } = useWeb3(); // Get provider from useWeb3 hook
+  useEffect(() => {
+    document.title = 'Dashboard - DoArt';
+    return () => {
+      document.title = 'DoArt';
+    };
+  }, []);
+  const { provider } = useWeb3();
   const chainId = import.meta.env.VITE_CHAIN_ID;
 
   const {
@@ -64,15 +71,14 @@ function Dashboard() {
 
       const [totalNfts, listings, auctions, filter] = await Promise.all([
         escrowStorage.getTotalNfts().catch(() => ethers.BigNumber.from(0)),
-        escrowStorage.getAllListings().catch(() => []), // Fixed: getAllListings() instead of getListings()
-        escrowStorage.getAllAuctions().catch(() => []), // Fixed: getAllAuctions() instead of getAuctions()
+        escrowStorage.getAllListings().catch(() => []),
+        escrowStorage.getAllAuctions().catch(() => []),
         doArt.filters.Transfer()
       ]);
 
       const activeListings = (listings || []).filter((l) => l.isListed).length;
       const activeAuctions = (auctions || []).filter((a) => a.isActive).length;
 
-      // Fetch total volume from Transfer events
       const events = await doArt
         .queryFilter(filter, 0, 'latest')
         .catch(() => []);
@@ -87,7 +93,7 @@ function Dashboard() {
         totalVolume
       };
     },
-    enabled: !!provider // Only run query if provider is available
+    enabled: !!provider
   });
 
   if (isLoading) return <Spinner />;

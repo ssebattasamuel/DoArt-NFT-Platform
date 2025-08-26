@@ -22,7 +22,6 @@ const Message = styled.p`
 const ArtNftContainer = () => {
   const { isLoading, artNfts, error } = useNfts();
 
-  // Guard against undefined artNfts
   const safeArtNfts = artNfts || [];
 
   if (isLoading) return <Spinner />;

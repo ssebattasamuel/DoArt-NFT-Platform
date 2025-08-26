@@ -1,3 +1,4 @@
+import React from 'react';
 import styled from 'styled-components';
 
 const StyledFormRow = styled.div`
@@ -37,9 +38,14 @@ const Error = styled.span`
 `;
 
 function FormRow({ label, error, children }) {
+  const childId =
+    React.isValidElement(children) && children.props
+      ? children.props.id
+      : undefined;
   return (
     <StyledFormRow>
-      {label && <Label htmlFor={children.props.id}>{label}</Label>}
+      {label && childId && <Label htmlFor={childId}>{label}</Label>}
+      {label && !childId && <Label>{label}</Label>} {}
       {children}
       {error && <Error>{error}</Error>}
     </StyledFormRow>
