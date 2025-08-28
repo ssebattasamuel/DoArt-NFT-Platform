@@ -1,5 +1,6 @@
 require('@nomicfoundation/hardhat-toolbox');
 require('hardhat-gas-reporter');
+require('dotenv').config();
 
 module.exports = {
   solidity: {
@@ -17,8 +18,11 @@ module.exports = {
     gasPrice: 20
   },
   networks: {
-    hardhat: {
-      chainId: 31337
+    hardhat: {},
+
+    holesky: {
+      url: process.env.VITE_HOLESKY_RPC_URL,
+      accounts: [process.env.VITE_PRIVATE_KEY]
     }
   }
 };

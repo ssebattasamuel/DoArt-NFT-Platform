@@ -213,17 +213,22 @@ function BatchForm({ type, onCloseModal }) {
           });
           return;
         }
+
         const formattedData = await Promise.all(
           data.items.map(async (item, index) => {
-            const priceField = useUsd
-              ? priceInputs[index].eth
-              : priceInputs[index].eth || item.purchasePrice;
+            const originalPrice = item.purchasePrice;
+            let priceField;
+            if (useUsd) {
+              priceField = priceInputs[index].eth;
+            } else {
+              priceField = originalPrice;
+            }
             return {
               title: item.title,
               description: item.description,
               image: item.image?.[0],
               royaltyBps: item.royaltyBps || 500,
-              purchasePrice: priceField,
+              purchasePrice: originalPrice,
               isUsd: useUsd,
               isListed: item.isListed || false,
               isAuction: item.isAuction || false,
@@ -232,6 +237,7 @@ function BatchForm({ type, onCloseModal }) {
             };
           })
         );
+
         console.log('BatchForm: Submitting batch data:', formattedData);
         await batchMint(formattedData);
       } else if (isList) {

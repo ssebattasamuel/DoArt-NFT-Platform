@@ -19,7 +19,7 @@ export function useUserListings() {
     const ownedTokenIds = events
       .filter((event) => event.args.to.toLowerCase() === account.toLowerCase())
       .map((event) => event.args.tokenId.toString())
-      .filter((tokenId, index, self) => self.indexOf(tokenId) === index); // Remove duplicates
+      .filter((tokenId, index, self) => self.indexOf(tokenId) === index); 
 
     const ownedNfts = await Promise.all(
       ownedTokenIds.map(async (tokenId) => {
@@ -80,7 +80,7 @@ export function useUserListings() {
           isListed: listing.isListed,
           seller: listing.seller,
           buyer: listing.buyer,
-          price: listing.price, // Keep as BigNumber
+          price: listing.price, 
           minBid: listing.minBid,
           escrowAmount: listing.escrowAmount,
           viewingPeriodEnd: listing.viewingPeriodEnd.toNumber(),
